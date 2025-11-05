@@ -1,0 +1,287 @@
+name: Growth Metrics Collection
+
+on:
+  schedule:
+    # Run daily at 2:00 AM UTC (off-peak for GitHub API)
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      repositories:
+        description: 'Comma-separated list of repositories to collect metrics for (owner/repo format)'
+        required: false
+        type: string
+      organizations:
+        description: 'Comma-separated list of organizations to discover repositories from'
+        required: false
+        type: string
+      force_collection:
+        description: 'Force collection even if recent run succeeded'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  PYTHON_VERSION: '3.9'
+  PYTHON_CACHE_DIR: ~/.cache/pip
+
+jobs:
+  collect-metrics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        # Ensure we get latest commit for scheduled runs
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ${{ env.PYTHON_CACHE_DIR }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Create directories
+      run: |
+        mkdir -p logs data config
+
+    - name: Create configuration
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        COLLECTION_REPOSITORIES: ${{ inputs.repositories || vars.GROWTH_METRICS_REPOSITORIES || '' }}
+        COLLECTION_ORGANIZATIONS: ${{ inputs.organizations || vars.GROWTH_METRICS_ORGANIZATIONS || '' }}
+        STORAGE_BACKEND: ${{ vars.GROWTH_METRICS_STORAGE_BACKEND || 'sqlite' }}
+        RATE_LIMIT_BUDGET: ${{ vars.GROWTH_METRICS_RATE_LIMIT_BUDGET || '2000' }}
+        RETENTION_DAYS: ${{ vars.GROWTH_METRICS_RETENTION_DAYS || '365' }}
+        LOG_LEVEL: ${{ vars.GROWTH_METRICS_LOG_LEVEL || 'INFO' }}
+      run: |
+        cat > config/growth_metrics.yaml << 'EOF'
+        github:
+          token: "${GITHUB_TOKEN}"
+          timeout: 30
+          max_retries: 3
+          per_page: 100
+          rate_limit_budget: ${RATE_LIMIT_BUDGET}
+          ${
+            COLLECTION_REPOSITORIES && COLLECTION_REPOSITORIES.split(',').map(repo => `repositories:\n  - "${repo.trim()}"`).join('\n  ')
+          }
+          ${
+            COLLECTION_ORGANIZATIONS && COLLECTION_ORGANIZATIONS.split(',').map(org => `organizations:\n  - "${org.trim()}"`).join('\n  ')
+          }
+
+        collection:
+          schedule: "0 2 * * *"
+          batch_size: 100
+          cache_ttl: 300
+          enable_caching: true
+          enable_rate_limiting: true
+          timeout_per_request: 30
+          max_concurrent_requests: 5
+          historical_days: 365
+          snapshot_interval: 24
+
+        storage:
+          backend: ${STORAGE_BACKEND}
+          ${
+            STORAGE_BACKEND == 'sqlite' && `connection_string: "sqlite:///data/growth_metrics.db"`
+          }
+          batch_size: 1000
+          enable_compression: true
+          retention_days: ${RETENTION_DAYS}
+          backup_enabled: true
+          backup_interval: 24
+          data_directory: "./data"
+          create_indexes: true
+
+        analytics:
+          health_score_weights:
+            contributors: 0.30
+            pr_throughput: 0.20
+            review_velocity: 0.20
+            issue_freshness: 0.15
+            fork_growth: 0.15
+          anomaly_detection_enabled: true
+          forecasting_enabled: true
+          forecasting_days: 30
+          trend_analysis_period: 90
+          community_engagement_tracking: true
+
+        system:
+          environment: production
+          debug: false
+          log_level: ${LOG_LEVEL}
+          log_format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+          metrics_enabled: true
+          telemetry_enabled: true
+
+        workflows:
+          workflows_enabled: true
+          daily_metrics_workflow: true
+          schedule_offset_minutes: 15
+          workflow_timeout: 3600
+        EOF
+
+    - name: Check configuration
+      run: |
+        python -c "
+        import yaml
+        with open('config/growth_metrics.yaml', 'r') as f:
+            config = yaml.safe_load(f)
+        print('Configuration loaded successfully')
+        print(f'Repositories: {len(config.get(\"github\", {}).get(\"repositories\", []))}')
+        print(f'Organizations: {len(config.get(\"github\", {}).get(\"organizations\", []))}')
+        print(f'Storage backend: {config.get(\"storage\", {}).get(\"backend\")}')
+        "
+
+    - name: Run metrics collection
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        python -m growth_metrics.core.collection_orchestrator
+      timeout-minutes: 45
+
+    - name: Check for recent successful runs
+      if: ${{ !inputs.force_collection }}
+      run: |
+        # Check if we've run recently (within last 25 hours to allow for some flexibility)
+        find logs -name "collection_summary_*.json" -newermt "25 hours ago" | head -1 | while read -r file; do
+          if [ -n "$file" ] && grep -q '"status": "completed"' "$file"; then
+            echo "Recent successful collection found: $file"
+            echo "Skipping collection run"
+            exit 0
+          fi
+        done
+        echo "No recent successful collections found, proceeding with collection"
+
+    - name: Analyze results
+      if: always()
+      run: |
+        # Create analysis summary
+        python -c "
+        import json
+        import glob
+        import os
+        from datetime import datetime
+        
+        # Find the most recent summary
+        summary_files = glob.glob('logs/collection_summary_*.json')
+        if summary_files:
+            latest_summary = max(summary_files, key=os.path.getctime)
+            print(f'Latest summary: {latest_summary}')
+            
+            with open(latest_summary, 'r') as f:
+                summary = json.load(f)
+            
+            # Extract key metrics
+            status = summary.get('status', 'unknown')
+            repo_stats = summary.get('repository_statistics', {})
+            perf_stats = summary.get('performance_statistics', {})
+            errors = summary.get('collection_errors', [])
+            
+            print(f'Collection Status: {status}')
+            print(f'Repositories Processed: {repo_stats.get(\"total_repositories\", 0)}')
+            print(f'Success Rate: {repo_stats.get(\"success_rate\", 0):.1%}')
+            print(f'Duration: {perf_stats.get(\"duration_formatted\", \"unknown\")}')
+            print(f'Errors: {len(errors)}')
+            
+            # Create GitHub summary for the workflow
+            with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as f:
+                f.write('# Growth Metrics Collection Report\n\n')
+                f.write(f'**Status:** {status}\n\n')
+                f.write(f'**Repositories Processed:** {repo_stats.get(\"total_repositories\", 0)}\n\n')
+                f.write(f'**Success Rate:** {repo_stats.get(\"success_rate\", 0):.1%}\n\n')
+                f.write(f'**Duration:** {perf_stats.get(\"duration_formatted\", \"unknown\")}\n\n')
+                f.write(f'**Total Errors:** {len(errors)}\n\n')
+                
+                if errors:
+                    f.write('## Errors\n\n')
+                    for error in errors[:10]:  # Show first 10 errors
+                        f.write(f'- {error}\n')
+                    if len(errors) > 10:
+                        f.write(f'- ... and {len(errors) - 10} more errors\n')
+                        
+                f.write('\n## Repository Statistics\n\n')
+                f.write(f'- Successful: {repo_stats.get(\"successful\", 0)}\n')
+                f.write(f'- Failed: {repo_stats.get(\"failed\", 0)}\n')
+                f.write(f'- Repos per minute: {perf_stats.get(\"repos_per_minute\", 0):.1f}\n')
+        else:
+            print('No summary files found')
+        "
+
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: growth-metrics-logs-${{ github.run_number }}
+        path: |
+          logs/
+          data/
+          config/
+        retention-days: 7
+
+    - name: Upload summary
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: growth-metrics-summary-${{ github.run_number }}
+        path: logs/collection_summary_*.json
+        retention-days: 30
+
+    - name: Notify on failure
+      if: failure() && github.event_name == 'schedule'
+      run: |
+        echo "Collection failed, but this is expected for scheduled runs. Check logs for details."
+
+    - name: Rate limit information
+      if: always()
+      run: |
+        echo "## Rate Limit Status"
+        echo "\`\`\`"
+        python -c "
+        import requests
+        import os
+        
+        token = os.environ.get('GITHUB_TOKEN')
+        if token:
+            headers = {
+                'Authorization': f'token {token}',
+                'Accept': 'application/vnd.github.v3+json',
+                'User-Agent': 'GrowthMetrics-Collection/1.0'
+            }
+            
+            try:
+                response = requests.get('https://api.github.com/rate_limit', headers=headers, timeout=10)
+                if response.status_code == 200:
+                    data = response.json()
+                    core = data.get('core', {})
+                    search = data.get('search', {})
+                    
+                    print(f'Core API: {core.get(\"remaining\", 0)}/{core.get(\"limit\", 0)} remaining')
+                    print(f'Core API resets at: {core.get(\"reset\", 0)}')
+                    print(f'Search API: {search.get(\"remaining\", 0)}/{search.get(\"limit\", 0)} remaining')
+                    print(f'Search API resets at: {search.get(\"reset\", 0)}')
+                else:
+                    print(f'Failed to get rate limit: {response.status_code}')
+            except Exception as e:
+                print(f'Error getting rate limit: {e}')
+        else:
+            print('No GitHub token available')
+        "
+        echo "\`\`\`"
