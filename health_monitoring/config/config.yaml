@@ -1,0 +1,309 @@
+# Repository Health Monitoring System Configuration
+
+# GitHub API Configuration
+github:
+  # GitHub Personal Access Token (scopes: repo, read:org)
+  token: "${GITHUB_TOKEN}"
+  
+  # Rate limiting settings
+  rate_limit:
+    buffer: 100  # Minimum requests to keep in reserve
+    max_requests_per_hour: 4500  # Conservative limit for GitHub API
+  
+  # API endpoints configuration
+  endpoints:
+    base_url: "https://api.github.com"
+    timeout: 30  # Request timeout in seconds
+    retries: 3   # Number of retries on failure
+  
+  # Repository to monitor (can be overridden per run)
+  default_repositories:
+    - "owner1/repo1"
+    - "owner2/repo2"
+
+# Health Score Calculation
+health_score:
+  # Component weights (must sum to 1.0)
+  weights:
+    community_engagement: 0.30
+    code_activity: 0.25
+    responsiveness: 0.20
+    community_growth: 0.15
+    sustainability: 0.10
+  
+  # Thresholds for health grades
+  grades:
+    excellent: 90    # A+ and A
+    good: 80         # B+ and B
+    fair: 70         # C+ and C
+    poor: 60         # D+ and D
+    critical: 0      # F
+  
+  # Normalization settings
+  normalization:
+    method: "min_max"  # min_max, z_score, percentile
+    target_window_days: 90  # Days for baseline calculation
+
+# Community Engagement Tracking
+engagement:
+  # Analysis window
+  analysis_window_days: 90
+  
+  # Contributor retention thresholds
+  retention:
+    active_window_days: 30    # Considered active if contributed within this window
+    at_risk_threshold_days: 60  # At risk if no activity for this many days
+    retention_rate_target: 70   # Target retention rate percentage
+  
+  # Contribution type categorization
+  contribution_types:
+    - code
+    - documentation
+    - issues
+    - discussions
+    - design
+    - tests
+  
+  # Response time targets (hours)
+  response_targets:
+    issue_response: 24
+    pr_review: 48
+    first_contribution_welcome: 4
+
+# Alert System Configuration
+alerts:
+  # Enable/disable alert types
+  enabled: true
+  
+  # Severity thresholds (score below this triggers alert)
+  health_score_thresholds:
+    critical: 40
+    high: 60
+    medium: 70
+  
+  # Response time thresholds (hours)
+  response_thresholds:
+    high: 48
+    critical: 96
+  
+  # Issue closure rate thresholds (percentage)
+  closure_rate_thresholds:
+    medium: 60
+    low: 40
+  
+  # Notification channels
+  notifications:
+    email:
+      enabled: true
+      smtp_server: "${SMTP_SERVER}"
+      smtp_port: 587
+      username: "${EMAIL_USERNAME}"
+      password: "${EMAIL_PASSWORD}"
+      recipients:
+        - "admin@example.com"
+        - "maintainers@example.com"
+    
+    slack:
+      enabled: false
+      webhook_url: "${SLACK_WEBHOOK_URL}"
+      channel: "#health-alerts"
+    
+    discord:
+      enabled: false
+      webhook_url: "${DISCORD_WEBHOOK_URL}"
+    
+    webhook:
+      enabled: false
+      urls:
+        - "${WEBHOOK_URL}"
+    
+    github_issues:
+      enabled: true
+      repository: "owner/health-monitoring"
+      labels:
+        - "health-alert"
+        - "automated"
+
+# Reporting Configuration
+reporting:
+  # Report generation settings
+  auto_generate: true
+  report_types:
+    - "weekly_health"
+    - "monthly_summary"
+    - "detailed_analytics"
+  
+  # Output directories
+  output:
+    reports: "./reports"
+    dashboard_data: "./dashboard_data"
+    alerts: "./alerts"
+  
+  # Report scheduling
+  schedules:
+    weekly_report: "0 9 * * 1"  # Every Monday at 9 AM
+    monthly_summary: "0 9 1 * *"  # First day of month at 9 AM
+    daily_health_check: "0 8 * * *"  # Every day at 8 AM
+
+# Dashboard Configuration
+dashboard:
+  # Update frequency
+  kpi_update_frequency: "daily"
+  time_series_days: 90
+  
+  # Visualization settings
+  charts:
+    health_score_trend: true
+    contributor_activity: true
+    response_times: true
+    issue_metrics: true
+  
+  # Real-time updates
+  realtime:
+    enabled: true
+    interval_seconds: 300  # 5 minutes
+  
+  # Export formats
+  export_formats:
+    - "json"
+    - "csv"
+
+# Data Storage Configuration
+storage:
+  # Local storage settings
+  local:
+    base_path: "./data"
+    retention_days: 365
+    compression: true
+  
+  # Historical data settings
+  historical:
+    auto_cleanup: true
+    cleanup_interval_days: 30
+    backup_enabled: true
+    backup_interval_days: 7
+
+# Performance Settings
+performance:
+  # Concurrent processing
+  max_concurrent_repos: 5
+  max_concurrent_api_calls: 10
+  
+  # Caching settings
+  cache:
+    enabled: true
+    ttl_seconds: 300  # 5 minutes
+    max_size_mb: 100
+  
+  # Processing limits
+  processing:
+    max_retries: 3
+    timeout_seconds: 300
+    batch_size: 50
+
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # Log file settings
+  file:
+    enabled: true
+    path: "./logs/health_monitor.log"
+    max_size_mb: 50
+    backup_count: 5
+  
+  # Log rotation
+  rotation:
+    enabled: true
+    when: "midnight"
+    interval: 1
+
+# Security Configuration
+security:
+  # API token security
+  token_encryption: false  # Set to true for production
+  token_rotation_days: 90
+  
+  # Data privacy
+  data_minimization: true
+  anonymize_contributors: false
+  
+  # Access control
+  allowed_repositories: []  # Empty = all accessible repositories
+
+# Environment-specific Overrides
+environments:
+  development:
+    logging:
+      level: "DEBUG"
+    github:
+      rate_limit:
+        buffer: 500
+    alerts:
+      notifications:
+        email:
+          enabled: false
+        github_issues:
+          enabled: false
+  
+  production:
+    logging:
+      level: "WARNING"
+    security:
+      token_encryption: true
+      data_minimization: true
+    performance:
+      max_concurrent_repos: 10
+      max_concurrent_api_calls: 20
+
+# Feature Flags
+features:
+  advanced_analytics: true
+  predictive_insights: false
+  security_scanning: false
+  dependency_monitoring: false
+  cross_repository_analysis: false
+  community_sentiment: false
+
+# Integration Settings
+integrations:
+  # Slack integration
+  slack:
+    app_token: "${SLACK_APP_TOKEN}"
+    bot_token: "${SLACK_BOT_TOKEN}"
+    signing_secret: "${SLACK_SIGNING_SECRET}"
+  
+  # Discord integration
+  discord:
+    bot_token: "${DISCORD_BOT_TOKEN}"
+    application_id: "${DISCORD_APP_ID}"
+  
+  # Webhook integrations
+  webhook:
+    secret: "${WEBHOOK_SECRET}"
+    signature_verification: true
+  
+  # External services
+  external:
+    pagerduty:
+      enabled: false
+      api_key: "${PAGERDUTY_API_KEY}"
+    opsgenie:
+      enabled: false
+      api_key: "${OPSGENIE_API_KEY}"
+
+# System Requirements
+requirements:
+  python_version: ">=3.8"
+  memory_mb: 512
+  disk_space_mb: 1024
+  network_bandwidth: "1Mbps"
+
+# Metadata
+system:
+  name: "Repository Health Monitoring System"
+  version: "1.0.0"
+  description: "Comprehensive health monitoring and analytics for GitHub repositories"
+  author: "Health Monitoring Team"
+  license: "MIT"
