@@ -1,0 +1,72 @@
+# Automation Hub Workflows
+# 
+# This directory contains GitHub Actions workflows for:
+# - Daily automation tasks
+# - Health monitoring
+# - Documentation generation
+# - Audit reporting
+
+# IMPORTANT SECURITY NOTES:
+# - All workflows use minimal permissions
+# - Automation is disabled by default
+# - Rate limiting is enforced at workflow level
+# - All actions are logged for audit
+
+name: Daily Automation Health Check
+
+on:
+  schedule:
+    # Run daily at 9 AM UTC (avoid peak hours)
+    - cron: '0 9 * * *'
+  workflow_dispatch:  # Allow manual trigger for testing
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Run health check
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        python -m scripts.cli status --detailed
+        
+    - name: Check automation compliance
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        python -m scripts.cli safety --check
+        
+    - name: Generate daily report
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        python -m scripts.cli audit report --format summary
+        
+    - name: Upload audit log
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: daily-audit-log
+        path: |
+          automation_hub.log
+          audit_report_*.json
+        retention-days: 30
