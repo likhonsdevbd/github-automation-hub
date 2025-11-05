@@ -1,0 +1,75 @@
+# Automation Hub Requirements
+# Core dependencies for the GitHub automation system
+
+# HTTP requests and API client
+requests>=2.31.0
+urllib3>=2.0.0
+
+# Configuration management
+PyYAML>=6.0
+python-dotenv>=1.0.0
+
+# Data handling and validation
+pydantic>=2.0.0
+jsonschema>=4.17.0
+
+# Logging and monitoring
+structlog>=23.0.0
+colorama>=0.4.6
+
+# Date and time handling
+python-dateutil>=2.8.2
+
+# Progress bars and CLI enhancements
+click>=8.1.0
+rich>=13.0.0
+tqdm>=4.65.0
+
+# Data analysis and statistics
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Testing and development
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-asyncio>=0.21.0
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.5.0
+
+# Security and encryption (optional)
+cryptography>=41.0.0
+
+# Documentation generation
+mkdocs>=1.5.0
+mkdocs-material>=9.0.0
+pdoc>=13.0.0
+
+# Environment management
+python-decouple>=3.8
+
+# Rate limiting enhancements
+ratelimit>=2.2.1
+
+# Data serialization
+orjson>=3.9.0
+
+# Type checking
+types-requests>=2.31.0
+types-PyYAML>=6.0.0
+
+# Performance monitoring
+psutil>=5.9.0
+
+# Backup and file operations
+pathlib2>=2.3.7; python_version<"3.4"
+
+# Git integration
+GitPython>=3.1.0
+
+# Async support (for future enhancements)
+aiohttp>=3.8.0
+asyncio-throttle>=1.0.0
+
+# Notification support (optional)
+slack-sdk>=3.21.0
