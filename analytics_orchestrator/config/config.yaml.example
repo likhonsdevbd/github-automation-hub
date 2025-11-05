@@ -1,0 +1,205 @@
+# Analytics Orchestrator Configuration Example
+# Copy this file to config.yaml and modify as needed
+
+# Application Settings
+app:
+  name: "Analytics Orchestrator"
+  version: "1.0.0"
+  environment: "development"
+  debug: true
+  log_level: "INFO"
+  timezone: "UTC"
+
+# Server Configuration
+server:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  max_connections: 1000
+  timeout: 30
+  keep_alive: 5
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://localhost:8080"
+  rate_limit:
+    requests_per_minute: 1000
+    burst_size: 100
+
+# Database Configuration
+database:
+  url: "sqlite:///data/analytics.db"
+  pool_size: 10
+  max_overflow: 20
+  pool_timeout: 30
+  pool_recycle: 3600
+  echo: false
+
+# Cache Configuration
+cache:
+  type: "redis"
+  redis_url: "redis://localhost:6379/0"
+  default_ttl: 3600
+  memory_cache_size: 1000
+  disk_cache_size: 10000
+  cache_dir: "data/cache"
+
+# GitHub Integration
+github:
+  api_base_url: "https://api.github.com"
+  rate_limit_per_hour: 24
+  rate_limit_per_repository: 5
+  request_timeout: 30
+  retry_attempts: 3
+  retry_delay: 1
+  pagination_limit: 100
+  
+  # Authentication
+  token_env_var: "GITHUB_TOKEN"
+  
+  # Webhook configuration
+  webhooks:
+    secret_env_var: "GITHUB_WEBHOOK_SECRET"
+    events:
+      - "push"
+      - "pull_request"
+      - "issues"
+      - "repository"
+
+# Analytics Configuration
+analytics:
+  # Data retention settings
+  retention:
+    metrics_days: 90
+    time_series_days: 365
+    logs_days: 30
+    
+  # Aggregation settings
+  aggregation:
+    intervals:
+      - "1m"
+      - "5m"
+      - "15m"
+      - "1h"
+      - "1d"
+    compute_realtime: true
+    batch_size: 1000
+    
+  # Analysis settings
+  analysis:
+    anomaly_detection:
+      enabled: true
+      threshold: 2.0
+      window_size: 24
+    trend_analysis:
+      enabled: true
+      min_data_points: 10
+    correlation_analysis:
+      enabled: true
+      correlation_threshold: 0.7
+
+# Integrations
+integrations:
+  health_monitoring:
+    enabled: true
+    schedule: "*/5 * * * *"
+    endpoints:
+      - "/health"
+      - "/metrics"
+    
+  follow_automation:
+    enabled: true
+    schedule: "0 */6 * * *"
+    max_follows_per_hour: 5
+    
+  daily_contributions:
+    enabled: true
+    schedule: "0 9 * * *"
+    timezone: "UTC"
+    
+  security_automation:
+    enabled: true
+    schedule: "0 2 * * *"
+    scan_interval_hours: 24
+
+# Monitoring and Alerts
+monitoring:
+  prometheus:
+    enabled: true
+    port: 9090
+    metrics_path: "/metrics"
+    
+  health_checks:
+    - name: "database"
+      url: "http://localhost:8000/api/health/database"
+      interval: 30
+      timeout: 10
+      
+  alerts:
+    - name: "high_memory_usage"
+      condition: "memory_usage > 80"
+      threshold: 80
+      severity: "warning"
+      
+    - name: "high_cpu_usage"
+      condition: "cpu_usage > 90"
+      threshold: 90
+      severity: "critical"
+
+# Security Settings
+security:
+  api_key_required: true
+  api_keys_env_var: "API_KEYS"
+  jwt_secret_env_var: "JWT_SECRET"
+  jwt_algorithm: "HS256"
+  jwt_expiration_hours: 24
+  bcrypt_rounds: 12
+
+# Data Pipeline Configuration
+pipeline:
+  # Processing queues
+  queues:
+    - name: "data_ingestion"
+      max_size: 10000
+      priority: "high"
+      
+    - name: "data_processing"
+      max_size: 5000
+      priority: "medium"
+      
+    - name: "analytics_computation"
+      max_size: 1000
+      priority: "low"
+  
+  # Batch processing
+  batch:
+    size: 1000
+    timeout: 60
+    max_retries: 3
+    
+  # Streaming
+  streaming:
+    buffer_size: 10000
+    flush_interval: 10
+    
+  # Error handling
+  error_handling:
+    max_retries: 3
+    retry_delay: 5
+    dead_letter_queue: "errors"
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "json"
+  output: "stdout"
+  file_output: "logs/analytics_orchestrator.log"
+  max_file_size: "100MB"
+  backup_count: 5
+  
+  # Structured logging
+  structured: true
+  include_trace_id: true
+  
+  # Performance logging
+  performance_logging: true
+  slow_query_threshold: 1.0

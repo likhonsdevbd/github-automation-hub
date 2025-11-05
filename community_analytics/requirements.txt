@@ -1,0 +1,118 @@
+# Community Analytics System Requirements
+
+# Core dependencies
+asyncio-mqtt>=0.11.0
+aiohttp>=3.8.0
+aiofiles>=23.0.0
+
+# Data processing and analysis
+numpy>=1.24.0
+pandas>=2.0.0
+scipy>=1.10.0
+
+# Machine Learning (optional but recommended)
+scikit-learn>=1.3.0
+# Uncomment if you want to use advanced ML features:
+# torch>=2.0.0
+# transformers>=4.30.0
+
+# Network analysis
+networkx>=3.0
+# Optional for community detection:
+# python-louvain>=0.15
+
+# Data visualization (optional)
+matplotlib>=3.7.0
+seaborn>=0.12.0
+plotly>=5.15.0
+# Optional for advanced dashboards:
+# dash>=2.11.0
+# streamlit>=1.25.0
+
+# Configuration and utilities
+pyyaml>=6.0
+python-dotenv>=1.0.0
+click>=8.1.0
+tqdm>=4.65.0
+
+# Data storage (choose one based on your backend)
+# JSON storage (default)
+# sqlite3 (built-in)
+
+# For PostgreSQL support (optional)
+# psycopg2-binary>=2.9.0
+# sqlalchemy>=2.0.0
+
+# Date and time handling
+python-dateutil>=2.8.0
+pytz>=2023.3
+
+# HTTP clients and API
+httpx>=0.24.0
+requests>=2.31.0
+
+# GitHub API integration
+pygithub>=1.58.0
+
+# Jupyter support (optional)
+# jupyter>=1.0.0
+# ipython>=8.0.0
+
+# Testing framework
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-mock>=3.11.0
+# Optional for coverage:
+# pytest-cov>=4.1.0
+
+# Code quality and formatting
+black>=23.7.0
+flake8>=6.0.0
+mypy>=1.5.0
+isort>=5.12.0
+
+# Documentation
+sphinx>=7.0.0
+sphinx-rtd-theme>=1.3.0
+
+# Monitoring and logging
+structlog>=23.1.0
+prometheus-client>=0.17.0
+
+# Security
+cryptography>=41.0.0
+
+# Performance profiling (optional)
+# line_profiler>=4.0.0
+# memory_profiler>=0.61.0
+
+# Database migrations (if using SQLAlchemy)
+# alembic>=1.11.0
+
+# Web framework (if enabling API)
+fastapi>=0.100.0
+uvicorn>=0.23.0
+# Optional web dependencies:
+# jinja2>=3.1.0
+# python-multipart>=0.0.6
+
+# Background tasks
+celery>=5.3.0
+# Optional message broker:
+# redis>=4.6.0
+# rabbitmq (system dependency)
+
+# Notifications
+# smtplib (built-in)
+# slack-sdk>=3.21.0
+# twilio>=8.5.0
+
+# Export and reporting
+openpyxl>=3.1.0
+# Optional for PDF reports:
+# reportlab>=4.0.0
+# weasyprint>=59.0
+
+# Development dependencies
+pre-commit>=3.3.0
+tox>=4.6.0

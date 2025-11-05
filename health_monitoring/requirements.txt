@@ -1,0 +1,41 @@
+# Core dependencies
+aiohttp>=3.8.0
+asyncio>=3.4.3
+PyYAML>=6.0
+numpy>=1.21.0
+scipy>=1.7.0
+
+# Data processing and analysis
+pandas>=1.5.0
+matplotlib>=3.5.0
+seaborn>=0.11.0
+
+# GitHub API and authentication
+PyGithub>=1.55
+requests>=2.28.0
+
+# Email and notifications
+aiosmtplib>=2.0.0
+email-validator>=2.0.0
+
+# Configuration and environment
+python-dotenv>=0.19.0
+pydantic>=1.10.0
+
+# Logging and monitoring
+structlog>=22.0.0
+
+# Testing and development
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+black>=22.0.0
+flake8>=5.0.0
+mypy>=0.991
+
+# Optional integrations
+# Uncomment if using specific integrations
+# slack-sdk>=3.18.0  # For Slack integration
+# discord.py>=2.0.0  # For Discord integration
+# jira>=3.5.0       # For JIRA integration
+# sentry-sdk>=1.12.0 # For error tracking

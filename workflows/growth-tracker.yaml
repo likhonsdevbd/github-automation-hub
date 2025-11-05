@@ -1,0 +1,139 @@
+# Repository Growth Tracking
+# 
+# Tracks daily repository metrics and generates growth reports.
+# This is a read-only workflow that doesn't perform any automation actions.
+
+name: Repository Growth Tracker
+
+on:
+  schedule:
+    # Run daily at 8 AM UTC (before health check)
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  growth-tracking:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Track repository stats
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        python -c "
+        import json
+        from datetime import datetime
+        from scripts.github_client import GitHubClient
+        from scripts.config_manager import ConfigManager
+        
+        # Initialize client
+        config = ConfigManager().get_config()
+        client = GitHubClient(config['github'])
+        
+        # Get current repository owner/name
+        import os
+        repo_parts = os.environ['GITHUB_REPOSITORY'].split('/')
+        owner, repo = repo_parts[0], repo_parts[1]
+        
+        # Collect stats
+        stats = {}
+        
+        # Repository stats
+        repo_stats = client.get_repository_stats(owner, repo)
+        if repo_stats:
+            stats['repository'] = repo_stats
+            
+        # PR analytics
+        pr_stats = client.get_pull_request_stats(owner, repo)
+        if pr_stats:
+            stats['pull_requests'] = pr_stats
+            
+        # Rate limit info
+        rate_limit = client.get_rate_limit_status()
+        if rate_limit:
+            stats['rate_limits'] = rate_limit
+            
+        # Add timestamp
+        stats['timestamp'] = datetime.now().isoformat()
+        stats['repository'] = f'{owner}/{repo}'
+        
+        # Save to daily stats file
+        with open('data/daily_stats.json', 'w') as f:
+            json.dump(stats, f, indent=2)
+            
+        print('Growth tracking completed successfully')
+        "
+        
+    - name: Generate weekly summary
+      if: github.event_name == 'schedule' && github.event.schedule == '0 8 * * 1'  # Mondays only
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        python -c "
+        import json
+        from datetime import datetime, timedelta
+        
+        # Load daily stats for the past week
+        try:
+            with open('data/daily_stats.json', 'r') as f:
+                today_stats = json.load(f)
+                
+            # Generate weekly summary (simplified)
+            summary = {
+                'week_start': (datetime.now() - timedelta(days=7)).isoformat(),
+                'week_end': datetime.now().isoformat(),
+                'repository': today_stats.get('repository'),
+                'final_stats': today_stats,
+                'growth_notes': [
+                    'This is an automated weekly summary',
+                    'Review daily_stats.json for detailed daily data',
+                    'All data collection follows GitHub rate limits'
+                ]
+            }
+            
+            with open('data/weekly_summary.json', 'w') as f:
+                json.dump(summary, f, indent=2)
+                
+            print('Weekly summary generated')
+            
+        except FileNotFoundError:
+            print('No previous stats found, skipping weekly summary')
+        "
+        
+    - name: Upload growth data
+      uses: actions/upload-artifact@v3
+      with:
+        name: repository-growth-data
+        path: |
+          data/daily_stats.json
+          data/weekly_summary.json
+        retention-days: 90
+        
+    - name: Comment on issue (if configured)
+      if: github.event_name == 'schedule'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # This would create a comment on a designated tracking issue
+        # Uncomment and configure if you want automated growth reporting
+        
+        echo "Growth tracking completed - data saved to artifacts"
+        # python -c "scripts.notify_growth_update()"  # Implement if needed

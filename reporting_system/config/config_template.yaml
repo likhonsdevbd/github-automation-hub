@@ -1,0 +1,189 @@
+# Reporting System Configuration Template
+# Copy this file to config.yaml and update with your settings
+
+# Database Configuration
+database:
+  # Primary database for storing reports and metadata
+  primary:
+    type: "postgresql"  # postgresql, mysql, sqlite
+    host: "localhost"
+    port: 5432
+    name: "reporting_system"
+    user: "reporting_user"
+    password: "your_password"
+    
+  # Cache database for performance
+  cache:
+    type: "redis"
+    host: "localhost"
+    port: 6379
+    db: 1
+    
+  # Document storage for reports
+  storage:
+    type: "mongodb"  # mongodb, filesystem
+    host: "localhost"
+    port: 27017
+    name: "report_storage"
+
+# Email Configuration
+email:
+  smtp_server: "smtp.gmail.com"
+  smtp_port: 587
+  username: "your_email@gmail.com"
+  password: "your_app_password"
+  use_tls: true
+  use_ssl: false
+  
+  # Default recipients
+  default_recipients:
+    - "stakeholder1@company.com"
+    - "stakeholder2@company.com"
+    
+  # Email templates
+  templates:
+    daily_report: "email_templates/daily_summary.html"
+    weekly_report: "email_templates/weekly_summary.html"
+    monthly_report: "email_templates/monthly_summary.html"
+    alert: "email_templates/alert.html"
+
+# Report Settings
+reports:
+  # Default formats
+  default_format: "pdf"  # pdf, html, excel
+  
+  # Export settings
+  export:
+    pdf:
+      page_size: "A4"
+      margin: "1in"
+      font_family: "Arial"
+      font_size: 11
+      
+    html:
+      template: "default_template.html"
+      css_file: "styles/dashboard.css"
+      
+    excel:
+      date_format: "YYYY-MM-DD"
+      number_format: "#,##0.00"
+      
+  # File storage
+  storage:
+    base_path: "/var/reports"
+    retention_days: 90
+    max_file_size_mb: 100
+    
+  # Scheduling
+  scheduling:
+    timezone: "UTC"
+    max_concurrent_reports: 3
+    retry_attempts: 3
+
+# Data Sources
+data_sources:
+  # GitHub Integration
+  github:
+    enabled: true
+    token: "your_github_token"
+    api_base: "https://api.github.com"
+    rate_limit: 5000
+    
+  # Google Analytics
+  google_analytics:
+    enabled: false
+    property_id: "your_property_id"
+    service_account_key: "path/to/service_account.json"
+    
+  # Custom API
+  custom_api:
+    enabled: false
+    endpoint: "https://api.company.com"
+    api_key: "your_api_key"
+
+# Dashboard Configuration
+dashboard:
+  server:
+    host: "0.0.0.0"
+    port: 8080
+    debug: false
+    
+  # Authentication
+  auth:
+    enabled: true
+    session_timeout_minutes: 60
+    
+  # Default dashboard settings
+  default_refresh_interval: 300  # seconds
+  max_data_points: 1000
+  
+  # Visual themes
+  themes:
+    default: "BOOTSTRAP"
+    dark: "CYBORG"
+    corporate: "SANDSTONE"
+
+# Branding & Templates
+branding:
+  company_name: "Your Company Name"
+  logo_path: "assets/company_logo.png"
+  primary_color: "#1f77b4"
+  secondary_color: "#ff7f0e"
+  
+  # Custom CSS
+  custom_css: "assets/custom_styles.css"
+  
+  # Footer
+  footer:
+    text: "© 2025 Your Company Name. All rights reserved."
+    website: "https://www.yourcompany.com"
+    
+# Monitoring & Logging
+monitoring:
+  # Logging
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_file: "logs/reporting_system.log"
+  log_max_size_mb: 100
+  log_backup_count: 5
+  
+  # Metrics
+  metrics:
+    enabled: true
+    port: 9090
+    endpoint: "/metrics"
+    
+  # Health checks
+  health_checks:
+    enabled: true
+    interval_seconds: 60
+    
+# Security
+security:
+  # API Keys
+  api_key_header: "X-API-Key"
+  allowed_origins:
+    - "https://yourcompany.com"
+    - "https://dashboard.yourcompany.com"
+    
+  # Rate limiting
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 100
+    
+# Notifications
+notifications:
+  # Slack Integration
+  slack:
+    enabled: false
+    webhook_url: "https://hooks.slack.com/services/..."
+    channel: "#reporting"
+    
+  # Microsoft Teams
+  teams:
+    enabled: false
+    webhook_url: "https://outlook.office.com/webhook/..."
+    
+  # Discord
+  discord:
+    enabled: false
+    webhook_url: "https://discord.com/api/webhooks/..."

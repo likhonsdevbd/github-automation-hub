@@ -1,0 +1,132 @@
+# Automation Hub Configuration Template
+# 
+# This template shows all available configuration options.
+# Copy this file to config.yaml and customize as needed.
+#
+# IMPORTANT SECURITY NOTES:
+# - GitHub token must be set via environment variable: export GITHUB_TOKEN="your_token_here"
+# - Automation is disabled by default for safety
+# - Review all settings before enabling automation
+
+# Core automation settings
+automation:
+  enabled: false  # DISABLED BY DEFAULT - Set to true only after configuration review
+  operation_mode: "analysis"  # "analysis" (read-only) or "active" (allows mutations)
+  max_concurrent_actions: 1  # Keep at 1 to avoid synchronized bursts
+  
+  # Safety features - DO NOT DISABLE
+  safety_features:
+    emergency_stop_on_422: true      # Stop on validation errors (spam signals)
+    exponential_backoff_on_429: true # Backoff on rate limits
+    audit_logging: true              # Log all actions for audit trail
+    rate_limit_monitoring: true      # Monitor rate limit headers
+
+# Rate limiting - CONSERVATIVE DEFAULTS
+rate_limits:
+  # Default: 24 actions/hour (within 20-30 range from architecture)
+  max_actions_per_hour: 24
+  max_api_calls_per_hour: 5000
+  
+  # Timing controls - ADJUST WITH CAUTION
+  base_delay_seconds: 150     # Base delay between actions (2.5 minutes)
+  min_delay_seconds: 60       # Minimum delay (1 minute)
+  min_gap_between_actions: 180 # Minimum gap between consecutive actions (3 minutes)
+  
+  # Jitter and backoff - IMPORTANT FOR COMPLIANCE
+  jitter_factor: 0.3          # 30% variability for human-like behavior
+  backoff_multiplier: 2.0     # Exponential backoff multiplier
+  max_backoff_seconds: 3600   # Maximum backoff time (1 hour)
+
+# GitHub API settings
+github:
+  # Token must be provided via environment variable: GITHUB_TOKEN
+  # Required scopes: read:user, user:follow (only for mutations)
+  token: null  # Will be overridden by environment variable
+  
+  api_base_url: "https://api.github.com"
+  timeout_seconds: 30
+  max_retries: 3
+  
+  # Minimum required scopes - DO NOT EXPAND WITHOUT REASON
+  allowed_scopes:
+    - "read:user"
+    - "user:follow"  # Only needed if following/unfollowing is enabled
+
+# Follow/Unfollow automation settings
+follow_unfollow:
+  # HIGH RISK FEATURES - DISABLED BY DEFAULT
+  auto_follow_enabled: false    # Only enable after thorough testing
+  auto_unfollow_enabled: false  # Only enable after thorough testing
+  
+  # Detection and prioritization
+  follow_back_detection_window_days: 7  # Wait 7 days before considering unfollow
+  prioritization_strategy: "relevance_score"  # "relevance_score" or "activity_score"
+  
+  # Exclusion filters - customize these
+  excluded_users:
+    - "github"      # Official GitHub accounts
+    - "github-actions"  # GitHub Actions bot
+    - "dependabot"  # Dependabot bot
+    - "renovate"    # Renovate bot
+    # Add any other users you want to exclude from automation
+  
+  # Inclusion criteria - refine based on your target audience
+  inclusion_criteria:
+    min_followers: 1          # Minimum follower count
+    max_followers: 10000      # Maximum follower count (avoid very large accounts)
+    min_public_repos: 0       # Minimum public repositories
+    max_public_repos: 100     # Maximum public repositories
+    account_age_min_days: 30  # Minimum account age in days
+
+# Logging configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "automation_hub.log"
+  max_file_size_mb: 10
+  backup_count: 5
+  audit_log_retention_days: 30
+
+# Telemetry and monitoring
+telemetry:
+  enabled: true              # Enable comprehensive telemetry
+  metrics_endpoint: null     # Optional: endpoint for metrics forwarding
+  event_logging: true        # Log all events
+  performance_tracking: true # Track performance metrics
+  privacy_mode: true         # Redact sensitive data from logs
+
+# Security and privacy settings
+security:
+  encrypt_logs: false        # Enable if storing sensitive data
+  redact_sensitive_data: true  # ALWAYS KEEP TRUE
+  max_audit_retention_days: 90  # How long to keep audit logs
+  token_rotation_days: 90    # Rotate tokens every 90 days
+  require_mfa: true          # Require MFA for GitHub account
+
+# Notifications and alerting
+notifications:
+  enabled: false             # Enable notifications
+  webhook_url: null          # Optional: webhook URL for alerts
+  email_notifications: false # Email notifications
+  email_address: null        # Email address for notifications
+  
+  # Alert thresholds - tune based on your tolerance
+  alert_thresholds:
+    422_error_rate: 0.01     # Alert if 422 error rate exceeds 1%
+    429_error_rate: 0.05     # Alert if 429 error rate exceeds 5%
+    consecutive_failures: 3   # Alert after 3 consecutive failures
+
+# DEPRECATED OR ADVANCED SETTINGS
+# Leave these at defaults unless you understand the implications
+
+# Advanced rate limiting
+# advanced_rate_limits:
+#   burst_protection: true      # Prevent sudden bursts of activity
+#   circadian_modifier: true   # Reduce activity during off-hours
+#   weekend_reduction: 0.5     # Reduce activity by 50% on weekends
+
+# Advanced compliance
+# advanced_compliance:
+#   enforce_cool_down_periods: true  # Mandatory cool-downs after errors
+#   require_human_approval: false    # Require manual approval for sensitive actions
+#   max_session_duration_hours: 8    # Maximum automation session duration

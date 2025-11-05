@@ -1,0 +1,147 @@
+# GitHub Configuration
+github:
+  token: "${GITHUB_TOKEN}"  # Set via environment variable
+  base_url: "https://api.github.com"  # GitHub Enterprise URL if needed
+  api_version: "2022-11-28"
+  timeout: 30  # Request timeout in seconds
+  max_retries: 3  # Maximum retry attempts
+  per_page: 100  # API pagination size
+  
+  # Repository targets - specify either repositories OR organizations
+  repositories:
+    # - "owner1/repo1"
+    # - "owner2/repo2"
+  
+  organizations:
+    # - "your-org"
+    # - "another-org"
+  
+  # Rate limiting budget (requests per hour)
+  rate_limit_budget: 2000
+
+# Data collection configuration
+collection:
+  # Cron-style schedule for automatic collection
+  schedule: "0 2 * * *"  # Daily at 2:00 AM UTC
+  
+  # Batch processing settings
+  batch_size: 100
+  max_concurrent_requests: 5
+  
+  # Caching configuration
+  cache_ttl: 300  # Cache TTL in seconds (5 minutes)
+  enable_caching: true
+  
+  # Rate limiting and performance
+  enable_rate_limiting: true
+  enable_circuit_breaker: true
+  timeout_per_request: 30
+  
+  # Data retention and history
+  historical_days: 365  # How many days of history to analyze
+  snapshot_interval: 24  # Hours between data snapshots
+
+# Data storage configuration
+storage:
+  # Storage backend: sqlite, postgres, or filesystem
+  backend: "sqlite"
+  
+  # Connection string for database
+  connection_string: "sqlite:///data/growth_metrics.db"
+  
+  # File storage settings (used for backup)
+  data_directory: "./data"
+  enable_compression: true
+  
+  # Database optimization
+  batch_size: 1000
+  create_indexes: true
+  
+  # Retention and cleanup
+  retention_days: 365
+  backup_enabled: true
+  backup_interval: 24  # Hours between backups
+
+# Analytics and reporting configuration
+analytics:
+  # Health score component weights (must sum to 1.0)
+  health_score_weights:
+    contributors: 0.30      # Monthly contributor growth and retention
+    pr_throughput: 0.20     # Pull request opening and merging activity
+    review_velocity: 0.20   # Speed of code review and merging
+    issue_freshness: 0.15   # Responsiveness to issue triage
+    fork_growth: 0.15       # Community experimentation and growth
+  
+  # Analysis features
+  anomaly_detection_enabled: true
+  forecasting_enabled: true
+  forecasting_days: 30      # Days to forecast ahead
+  trend_analysis_period: 90 # Days of history to analyze for trends
+  
+  # Community engagement tracking
+  community_engagement_tracking: true
+  release_tracking: true
+
+# Notification and alerting configuration
+notifications:
+  # Notification channels
+  email_enabled: false
+  slack_enabled: false
+  webhook_enabled: true
+  github_issues_enabled: true
+  
+  # SMTP settings (if email enabled)
+  smtp_server: ""
+  smtp_port: 587
+  smtp_username: ""
+  smtp_password: ""
+  
+  # Slack webhook (if Slack enabled)
+  slack_webhook_url: ""
+  
+  # GitHub webhook configuration
+  github_webhook_secret: ""
+  
+  # Alert thresholds
+  alert_thresholds:
+    health_score_drop: 10.0      # Alert if health score drops 10%
+    contributors_stagnation: 4   # Alert if no growth for 4 weeks
+    review_velocity_slowdown: 2.0 # Alert if review time doubles
+    issue_freshness_degradation: 21 # Alert if issues age >21 days
+
+# System configuration
+system:
+  # Environment settings
+  environment: "production"  # development, staging, production
+  debug: false
+  
+  # Logging configuration
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  metrics_enabled: true
+  profiling_enabled: false
+  
+  # Telemetry and monitoring
+  telemetry_enabled: true
+  performance_monitoring: true
+
+# GitHub Actions workflow configuration
+workflows:
+  # Enable/disable workflows
+  workflows_enabled: true
+  daily_metrics_workflow: true
+  health_check_workflow: true
+  reporting_workflow: true
+  alert_workflow: true
+  
+  # Workflow scheduling
+  schedule_offset_minutes: 15  # Random offset to avoid thundering herd
+  workflow_timeout: 3600  # 1 hour timeout for workflows
+  
+  # Repository variables (set in GitHub repository settings)
+  # GROWTH_METRICS_REPOSITORIES="owner1/repo1,owner2/repo2"
+  # GROWTH_METRICS_ORGANIZATIONS="your-org"
+  # GROWTH_METRICS_STORAGE_BACKEND="sqlite"
+  # GROWTH_METRICS_RATE_LIMIT_BUDGET="2000"
+  # GROWTH_METRICS_RETENTION_DAYS="365"
+  # GROWTH_METRICS_LOG_LEVEL="INFO"

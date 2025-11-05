@@ -1,0 +1,33 @@
+# Core dependencies
+requests>=2.28.0
+urllib3>=1.26.0
+
+# Data processing and analysis
+pandas>=1.5.0
+numpy>=1.21.0
+scipy>=1.9.0
+scikit-learn>=1.1.0
+
+# Database
+sqlalchemy>=1.4.0
+
+# Configuration management
+pyyaml>=6.0
+python-dotenv>=0.19.0
+
+# Logging and monitoring
+structlog>=22.0.0
+
+# Async support (optional)
+asyncio-throttle>=1.0.0
+
+# Development dependencies (optional)
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+black>=22.0.0
+flake8>=5.0.0
+mypy>=0.991
+
+# Documentation
+sphinx>=5.0.0
+sphinx-rtd-theme>=1.2.0

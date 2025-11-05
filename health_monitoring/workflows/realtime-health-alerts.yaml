@@ -1,0 +1,413 @@
+name: Real-time Health Alerts
+
+on:
+  # Real-time monitoring triggers
+  schedule:
+    # Run every 2 hours during business hours (8 AM - 8 PM UTC)
+    - cron: '0 8-20/2 * * *'
+  repository_dispatch:
+    types: [health-alert-triggered]
+  workflow_dispatch:
+    inputs:
+      severity:
+        description: 'Alert severity level'
+        required: true
+        type: choice
+        options:
+          - critical
+          - high
+          - medium
+      repository:
+        description: 'Repository to check (owner/repo)'
+        required: true
+        type: string
+      reason:
+        description: 'Reason for manual alert'
+        required: true
+        type: string
+
+jobs:
+  real-time-alert-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+      
+      - name: Load configuration
+        run: |
+          echo "${{ secrets.HEALTH_CONFIG }}" > config/config.yaml
+          echo "${{ secrets.ALERT_RULES_CONFIG }}" > config/alert_rules.yaml
+      
+      - name: Run focused health check
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ALERT_SEVERITY: ${{ inputs.severity || 'medium' }}
+        run: |
+          REPOSITORIES="${{ inputs.repository || env.REPOSITORIES }}"
+          if [ -z "$REPOSITORIES" ]; then
+            echo "No repositories specified for real-time check"
+            exit 0
+          fi
+          
+          python -m health_monitoring.scripts.realtime_health_check \
+            --repositories "$REPOSITORIES" \
+            --config config/config.yaml \
+            --alert-rules config/alert_rules.yaml \
+            --severity-filter "${ALERT_SEVERITY}" \
+            --real-time-mode \
+            --output-dir ./data/realtime
+      
+      - name: Create critical GitHub issue
+        if: failure() || contains(github.event.head_commit.message, '[critical-alert]')
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issueBody = `
+            ## 🚨 Critical Real-time Health Alert
+            
+            **Repository:** ${{ github.repository }}
+            **Trigger:** ${{ github.event_name }}
+            **Time:** ${new Date().toISOString()}
+            **Severity:** ${{ inputs.severity || 'unknown' }}
+            
+            ### Alert Details
+            A critical health issue has been detected through real-time monitoring.
+            
+            ### Immediate Actions Required
+            1. Review the alert details in the workflow logs
+            2. Investigate the root cause
+            3. Implement remediation steps
+            4. Monitor for resolution
+            
+            ### Resources
+            - [Alert Logs](./actions/runs/${{ github.run_id }})
+            - [Health Dashboard](./actions)
+            - [Alert Configuration](./config/alert_rules.yaml)
+            
+            ---
+            *This issue was automatically created by the Real-time Health Alert System*
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Critical Alert: ${{ inputs.repository || github.repository }} - ${new Date().toISOString()}`,
+              body: issueBody,
+              labels: ['health-alert', 'critical', 'real-time', 'automated']
+            });
+      
+      - name: Update GitHub issue with real-time data
+        if: github.event_name == 'repository_dispatch' && github.event.client_payload.repository
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const repo = '${{ github.event.client_payload.repository }}';
+            const severity = '${{ github.event.client_payload.severity || 'medium' }}';
+            
+            // Find existing issue for this repository and severity
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: `health-alert,${severity},real-time`,
+              per_page: 100
+            });
+            
+            const existingIssue = issues.data.find(issue => 
+              issue.title.includes(repo) && 
+              issue.title.includes('Real-time')
+            );
+            
+            if (existingIssue) {
+              // Update existing issue with new alert data
+              const updateBody = `
+              ### New Alert Update
+              
+              **Time:** ${new Date().toISOString()}
+              **Repository:** ${repo}
+              **Status:** ${github.event.action || 'updated'}
+              
+              This alert is being actively monitored.
+              `;
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: updateBody
+              });
+            }
+      
+      - name: Send immediate Slack notification
+        if: failure() || contains(github.event.head_commit.message, '[critical-alert]')
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          channel: '#health-alerts-critical'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          custom_payload: |
+            {
+              "text": "🚨 Critical Real-time Health Alert",
+              "attachments": [
+                {
+                  "color": "danger",
+                  "fields": [
+                    {
+                      "title": "Repository",
+                      "value": "${{ github.repository }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Severity",
+                      "value": "${{ inputs.severity || 'critical' }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Time",
+                      "value": "${new Date().toISOString()}",
+                      "short": true
+                    },
+                    {
+                      "title": "Action Required",
+                      "value": "Immediate investigation and remediation",
+                      "short": false
+                    }
+                  ],
+                  "actions": [
+                    {
+                      "type": "button",
+                      "text": "View Logs",
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
+      
+      - name: Trigger community notification
+        if: github.event_name == 'repository_dispatch' && github.event.client_payload.notify_community
+        uses: actions/github-script@v6
+        with:
+          script: |
+            // Post to community discussions or create community alert
+            const communityMessage = `
+            ## 📢 Community Health Notice
+            
+            **Repository:** ${{ github.event.client_payload.repository }}
+            **Notice:** ${{ github.event.client_payload.message || 'Health monitoring alert' }}
+            
+            Our maintainers are aware and working on this issue. Thank you for your patience.
+            
+            - Health Monitoring System
+            `;
+            
+            // This would require repository to have discussions enabled
+            // and appropriate permissions
+            console.log('Community notification:', communityMessage);
+
+  escalate-critical-alerts:
+    needs: real-time-alert-check
+    runs-on: ubuntu-latest
+    if: |
+      failure() && 
+      (contains(github.event.head_commit.message, '[escalate]') || 
+       github.event.client_payload.severity == 'critical')
+    timeout-minutes: 10
+    
+    steps:
+      - name: Escalate to incident response
+        if: failure()
+        env:
+          PAGERDUTY_API_KEY: ${{ secrets.PAGERDUTY_API_KEY }}
+        run: |
+          if [ -n "$PAGERDUTY_API_KEY" ]; then
+            curl -X POST \
+              -H "Authorization: Token token=$PAGERDUTY_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "service": {
+                  "id": "health-monitoring",
+                  "type": "service_reference"
+                },
+                "incident": {
+                  "type": "incident",
+                  "title": "Critical Repository Health Alert - ${{ github.repository }}",
+                  "urgency": "high",
+                  "body": {
+                    "type": "incident_body",
+                    "details": "Critical health alert detected in repository monitoring. Immediate investigation required."
+                  }
+                }
+              }' \
+              https://api.pagerduty.com/incidents
+          fi
+      
+      - name: Create high-priority issue
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issueBody = `
+            ## 🚨 ESCALATED: Critical Repository Health Alert
+            
+            **Repository:** ${{ github.repository }}
+            **Escalation Time:** ${new Date().toISOString()}
+            **Priority:** HIGH
+            **Status:** Requires Immediate Attention
+            
+            ### Escalation Details
+            This alert has been escalated due to:
+            - Critical severity level
+            - Failed automated resolution
+            - Potential impact on repository health
+            
+            ### Required Actions
+            1. **Immediate:** Review alert details and workflow logs
+            2. **Within 1 hour:** Begin investigation and remediation
+            3. **Within 4 hours:** Provide status update
+            4. **Within 24 hours:** Document resolution
+            
+            ### Contact Information
+            - Primary: Repository maintainers
+            - Escalation: Platform team
+            - Emergency: Incident response team
+            
+            ### Resources
+            - [Workflow Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            - [Run Details](./actions/runs/${{ github.run_id })
+            
+            ---
+            *This is an escalated alert from the Repository Health Monitoring System*
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 ESCALATED: Critical Health Alert - ${{ github.repository }}`,
+              body: issueBody,
+              labels: ['health-alert', 'critical', 'escalated', 'high-priority', 'automated']
+            });
+
+  notify-stakeholders-immediate:
+    needs: [real-time-alert-check, escalate-critical-alerts]
+    runs-on: ubuntu-latest
+    if: always() && (needs.real-time-alert-check.result == 'failure' || needs.escalate-critical-alerts.result == 'success')
+    
+    steps:
+      - name: Send email to maintainers
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: 🚨 URGENT: Critical Health Alert - ${{ github.repository }}
+          to: ${{ secrets.MAINTAINERS_EMAIL }}
+          from: health-monitor@github.com
+          body: |
+            🚨 CRITICAL HEALTH ALERT 🚨
+            
+            Repository: ${{ github.repository }}
+            Time: $(date '+%Y-%m-%d %H:%M:%S UTC')
+            Severity: Critical
+            Status: Requires Immediate Attention
+            
+            A critical health issue has been detected in your repository.
+            
+            IMMEDIATE ACTIONS REQUIRED:
+            1. Check the GitHub issue created for this alert
+            2. Review workflow logs for detailed error information
+            3. Begin investigation and remediation
+            4. Monitor for resolution
+            
+            This alert has been escalated to incident response if unresolved.
+            
+            ---
+            Repository Health Monitoring System
+            Emergency Response Protocol Activated
+          priority: high
+      
+      - name: Update status page
+        if: failure()
+        env:
+          STATUSPAGE_API_KEY: ${{ secrets.STATUSPAGE_API_KEY }}
+        run: |
+          if [ -n "$STATUSPAGE_API_KEY" ]; then
+            curl -X POST \
+              -H "Authorization: OAuth $STATUSPAGE_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "incident": {
+                  "name": "Critical Repository Health Alert - ${{ github.repository }}",
+                  "status": "investigating",
+                  "impact_override": "major",
+                  "body": "Critical health monitoring alert detected. Investigation in progress."
+                }
+              }' \
+              https://api.statuspage.io/v1/pages/${{ secrets.STATUSPAGE_PAGE_ID }}/incidents
+          fi
+
+  create-remediation-task:
+    needs: real-time-alert-check
+    runs-on: ubuntu-latest
+    if: failure()
+    
+    steps:
+      - name: Create remediation task
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const remediationBody = `
+            ## 🔧 Health Alert Remediation Task
+            
+            **Repository:** ${{ github.repository }}
+            **Created:** ${new Date().toISOString()}
+            **Status:** Open
+            **Priority:** High
+            
+            ### Alert Summary
+            A real-time health monitoring alert was triggered requiring remediation.
+            
+            ### Remediation Checklist
+            - [ ] Review alert details and workflow logs
+            - [ ] Investigate root cause
+            - [ ] Implement fix or improvement
+            - [ ] Test and verify resolution
+            - [ ] Update monitoring configuration if needed
+            - [ ] Document resolution steps
+            
+            ### Prevention Measures
+            - [ ] Review alert thresholds
+            - [ ] Improve monitoring coverage
+            - [ ] Update runbooks
+            - [ ] Schedule follow-up review
+            
+            ### Resources
+            - [Alert Workflow](./actions/runs/${{ github.run_id }})
+            - [Health Dashboard](./actions)
+            - [Configuration](./config/)
+            
+            ---
+            Created by Repository Health Monitoring System
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🔧 Health Alert Remediation - ${new Date().toISOString().split('T')[0]}`,
+              body: remediationBody,
+              labels: ['health-alert', 'remediation', 'task', 'automated']
+            });

@@ -1,0 +1,292 @@
+# Documentation Generation
+# 
+# Generates and publishes documentation for the automation hub.
+# Runs on schedule and on-demand for keeping docs up to date.
+
+name: Generate Documentation
+
+on:
+  push:
+    paths:
+      - 'scripts/**'
+      - 'config/**'
+      - 'docs/**'
+      - 'README.md'
+  schedule:
+    # Run weekly on Sunday at 10 AM UTC
+    - cron: '0 10 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  pull-requests: read
+
+jobs:
+  generate-docs:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for changelog generation
+        
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pdoc mkdocs mkdocs-material
+        
+    - name: Generate API documentation
+      run: |
+        mkdir -p docs/api
+        python -c "
+        import os
+        import sys
+        sys.path.append('scripts')
+        
+        # Generate API documentation using pdoc
+        os.system('pdoc --html --output-dir docs/api --config show_source_code=False scripts/')
+        "
+        
+    - name: Create configuration documentation
+      run: |
+        python -c "
+        import yaml
+        
+        # Generate configuration reference
+        config_doc = '''
+# Configuration Reference
+
+This document explains all available configuration options.
+
+## Core Settings
+
+### automation
+Controls the main automation behavior:
+
+- `enabled`: Enable/disable automation (default: false)
+- `operation_mode`: \"analysis\" or \"active\" (default: \"analysis\")
+- `max_concurrent_actions`: Maximum concurrent actions (default: 1)
+
+### rate_limits
+Conservative rate limiting settings:
+
+- `max_actions_per_hour`: Actions per hour (default: 24, max: 30)
+- `base_delay_seconds`: Base delay between actions (default: 150)
+- `min_delay_seconds`: Minimum delay (default: 60)
+
+### follow_unfollow
+Follow/unfollow automation settings:
+
+- `auto_follow_enabled`: Enable automatic following (default: false)
+- `auto_unfollow_enabled`: Enable automatic unfollowing (default: false)
+- `follow_back_detection_window_days`: Days to wait before considering unfollow (default: 7)
+
+## Safety Features
+
+All safety features are enabled by default and should not be disabled:
+
+- `emergency_stop_on_422`: Stops on validation errors
+- `exponential_backoff_on_429`: Respects rate limits
+- `audit_logging`: Maintains audit trail
+- `rate_limit_monitoring`: Monitors rate limit headers
+
+## Example Configuration
+
+See `config/config_template.yaml` for a complete example.
+'''
+        
+        with open('docs/configuration.md', 'w') as f:
+            f.write(config_doc)
+        "
+        
+    - name: Create usage guide
+      run: |
+        cat > docs/usage-guide.md << 'EOF'
+# Automation Hub Usage Guide
+
+## Quick Start
+
+1. **Set up GitHub token**:
+   ```bash
+   export GITHUB_TOKEN="your_github_token_here"
+   ```
+
+2. **Create configuration**:
+   ```bash
+   python -m scripts.cli config create-template
+   cp config_template.yaml config.yaml
+   # Edit config.yaml as needed
+   ```
+
+3. **Validate configuration**:
+   ```bash
+   python -m scripts.cli config validate
+   ```
+
+4. **Check safety status**:
+   ```bash
+   python -m scripts.cli safety --check
+   ```
+
+## Common Operations
+
+### Status Monitoring
+```bash
+# Check current status
+python -m scripts.cli status
+
+# Detailed status with performance metrics
+python -m scripts.cli status --detailed
+```
+
+### Follow Operations
+```bash
+# Follow a specific user (dry run first)
+python -m scripts.cli follow --username targetuser --dry-run
+python -m scripts.cli follow --username targetuser
+
+# Find unfollow candidates
+python -m scripts.cli unfollow-candidates --limit 20
+```
+
+### Safety Controls
+```bash
+# Check safety status
+python -m scripts.cli safety --check
+
+# Enable automation (requires confirmation)
+python -m scripts.cli safety --enable
+
+# Disable automation
+python -m scripts.cli safety --disable
+```
+
+### Audit and Reporting
+```bash
+# Generate audit report
+python -m scripts.cli audit report
+
+# Export telemetry data
+python -m scripts.cli audit export --format json
+```
+
+## Safety Guidelines
+
+1. **Always start with dry runs** to test configurations
+2. **Use conservative rate limits** (12-24 actions/hour)
+3. **Monitor compliance status** regularly
+4. **Keep audit logs** for accountability
+5. **Enable emergency stops** (they're on by default)
+
+## Compliance
+
+This tool is designed to be compliant with:
+- GitHub Terms of Service
+- Acceptable Use Policies
+- Conservative API rate limits
+
+Always review the latest GitHub policies before use.
+EOF
+
+    - name: Create API reference
+      run: |
+        cat > docs/api-reference.md << 'EOF'
+# API Reference
+
+## Core Classes
+
+### AutomationManager
+Main orchestrator for automation activities.
+
+```python
+from scripts.automation_manager import AutomationManager
+
+# Initialize (loads configuration)
+manager = AutomationManager('config.yaml')
+
+# Start automation
+manager.start()
+
+# Execute actions
+success = manager.execute_follow_action('username')
+candidates = manager.get_follow_back_candidates()
+
+# Get status
+status = manager.get_status_report()
+```
+
+### RateLimiter
+Conservative rate limiting with backoff.
+
+```python
+from scripts.rate_limiter import RateLimiter
+
+# Initialize with config
+limiter = RateLimiter(config)
+
+# Check if action can be executed
+if limiter.can_execute_action('follow'):
+    # Execute with delay
+    delay = limiter.execute_with_delay('follow')
+    limiter.record_action('follow')
+```
+
+### GitHubClient
+Authenticated GitHub API client.
+
+```python
+from scripts.github_client import GitHubClient
+
+# Initialize with token
+client = GitHubClient(config)
+
+# Follow user
+response = client.follow_user('username')
+
+# Get statistics
+stats = client.get_repository_stats('owner', 'repo')
+pr_stats = client.get_pull_request_stats('owner', 'repo')
+```
+
+## Command Line Interface
+
+All CLI commands follow this pattern:
+
+```bash
+python -m scripts.cli <command> [options]
+```
+
+See `python -m scripts.cli --help` for full command list.
+EOF
+
+    - name: Deploy to GitHub Pages
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs
+        publish_branch: gh-pages
+        destination_dir: docs
+
+    - name: Create documentation PR
+      if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Commit documentation changes
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Actions"
+        
+        git add docs/
+        git commit -m "Update documentation [skip ci]" || echo "No changes to commit"
+        
+        # Push to update current branch
+        git push || echo "Could not push changes"

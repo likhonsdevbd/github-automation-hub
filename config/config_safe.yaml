@@ -1,0 +1,109 @@
+# Safe Automation Hub Configuration
+# 
+# This is a conservative configuration suitable for initial testing.
+# All automation is disabled by default. Enable only after thorough review.
+
+# Core automation settings - KEEP DISABLED FOR SAFETY
+automation:
+  enabled: false           # MUST remain false until you've tested everything
+  operation_mode: "analysis"  # Read-only mode for initial testing
+  max_concurrent_actions: 1  # Never increase this
+  
+  safety_features:
+    emergency_stop_on_422: true      # CRITICAL: Stops on spam signals
+    exponential_backoff_on_429: true # CRITICAL: Respects rate limits
+    audit_logging: true              # CRITICAL: Full audit trail
+    rate_limit_monitoring: true      # CRITICAL: Monitor rate limits
+
+# Very conservative rate limiting - SAFE FOR TESTING
+rate_limits:
+  max_actions_per_hour: 12      # VERY conservative: 12 actions/hour (half of standard)
+  max_api_calls_per_hour: 5000  # GitHub's standard limit
+  
+  # Extended delays for safety - INCREASE if you hit rate limits
+  base_delay_seconds: 300       # 5 minutes between actions
+  min_delay_seconds: 120        # Minimum 2 minutes
+  min_gap_between_actions: 300  # Minimum 5 minutes between any actions
+  
+  # Backoff settings - DO NOT CHANGE
+  jitter_factor: 0.3            # 30% variability
+  backoff_multiplier: 2.0       # Exponential backoff
+  max_backoff_seconds: 7200     # Maximum 2 hours backoff
+
+# GitHub API settings - NO CHANGES NEEDED
+github:
+  # Token MUST be set via environment: export GITHUB_TOKEN="your_token"
+  token: null
+  api_base_url: "https://api.github.com"
+  timeout_seconds: 30
+  max_retries: 3
+  
+  # Minimal required scopes for analysis
+  allowed_scopes:
+    - "read:user"
+
+# Complete automation disable - SAFE DEFAULTS
+follow_unfollow:
+  auto_follow_enabled: false    # ALWAYS DISABLED until tested
+  auto_unfollow_enabled: false  # ALWAYS DISABLED until tested
+  
+  follow_back_detection_window_days: 14  # Extended observation period
+  prioritization_strategy: "relevance_score"
+  
+  excluded_users:              # Exclude all common bot accounts
+    - "github"
+    - "github-actions"
+    - "dependabot"
+    - "renovate"
+    - "codecov"
+    - "travis-ci"
+    - "circleci"
+    - "coveralls"
+    - "codestats"
+    - "stable"
+    - "maintainers"
+  
+  inclusion_criteria:
+    min_followers: 5           # Avoid accounts with no following
+    max_followers: 5000        # Avoid very large accounts
+    min_public_repos: 1        # Prefer active users
+    max_public_repos: 50       # Avoid corporate accounts
+    account_age_min_days: 90   # Prefer established accounts
+
+# Logging - DETAILED FOR TESTING
+logging:
+  level: "DEBUG"              # Verbose logging for testing
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "automation_hub_safe.log"
+  max_file_size_mb: 10
+  backup_count: 5
+  audit_log_retention_days: 7  # Shorter retention for testing
+
+# Comprehensive telemetry - ENABLED FOR MONITORING
+telemetry:
+  enabled: true
+  metrics_endpoint: null
+  event_logging: true
+  performance_tracking: true
+  privacy_mode: true          # CRITICAL: Redact sensitive data
+
+# Security - STRICT DEFAULTS
+security:
+  encrypt_logs: false
+  redact_sensitive_data: true     # CRITICAL: Always enabled
+  max_audit_retention_days: 7     # Minimal retention for testing
+  token_rotation_days: 90
+  require_mfa: true
+
+# Notifications - DISABLED FOR TESTING
+notifications:
+  enabled: false
+  webhook_url: null
+  email_notifications: false
+  email_address: null
+  
+  # Very sensitive thresholds for testing
+  alert_thresholds:
+    422_error_rate: 0.0       # Alert on ANY 422 errors
+    429_error_rate: 0.01      # Alert on 1% rate limit errors
+    consecutive_failures: 1   # Alert on first failure
