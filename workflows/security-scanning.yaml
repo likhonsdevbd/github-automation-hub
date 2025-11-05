@@ -1,0 +1,199 @@
+name: Security Scanning and Dependency Management
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run daily security scan
+    - cron: '0 2 * * *'
+  push:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.11'
+  GO_VERSION: '1.21'
+  JAVA_VERSION: '17'
+
+jobs:
+  code-scanning:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'javascript', 'python', 'go' ]
+        
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
+        
+    - name: Install dependencies
+      run: |
+        if [ "${{ matrix.language }}" = "javascript" ]; then
+          npm ci
+        elif [ "${{ matrix.language }}" = "python" ]; then
+          pip install -r requirements.txt
+        elif [ "${{ matrix.language }}" = "go" ]; then
+          go mod download
+        fi
+        
+    - name: Build application
+      run: |
+        if [ "${{ matrix.language }}" = "javascript" ]; then
+          npm run build --if-present
+        elif [ "${{ matrix.language }}" = "python" ]; then
+          python -m pytest --version
+        elif [ "${{ matrix.language }}" = "go" ]; then
+          go build ./...
+        fi
+        
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Dependency Review
+      uses: actions/dependency-review-action@v3
+      with:
+        fail-on-severity: moderate
+        allow-ghsas: true
+        allow-licenses: "MIT,Apache-2.0,BSD-2-Clause"
+
+  secret-scanning:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Run TruffleHog OSS
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified
+        
+    - name: Run GitLeaks
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  container-scanning:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || contains(github.event.head_commit.message, '[docker]')
+    steps:
+    - name: Build Docker image
+      run: |
+        docker build -t security-scan:latest .
+        
+    - name: Run Trivy container scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'security-scan:latest'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  license-compliance:
+    name: License Compliance Check
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run license checker
+      run: |
+        npm install -g license-checker
+        license-checker --json > licenses.json
+        
+    - name: Check for prohibited licenses
+      run: |
+        node -e "
+        const licenses = require('./licenses.json');
+        const prohibited = ['GPL', 'AGPL', 'LGPL', 'EPL'];
+        let hasProhibited = false;
+        
+        for (const pkg in licenses) {
+          const license = licenses[pkg].licenses;
+          prohibited.forEach(prob => {
+            if (license && license.includes(prob)) {
+              console.log(\`⚠️  Prohibited license detected: \${pkg} (\${license})\`);
+              hasProhibited = true;
+            }
+          });
+        }
+        
+        if (hasProhibited) {
+          process.exit(1);
+        }
+        "
+
+  compliance-report:
+    name: Generate Security Compliance Report
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [code-scanning, dependency-review, secret-scanning, container-scanning, license-compliance]
+    steps:
+    - name: Generate compliance report
+      run: |
+        echo "# Security Compliance Report" > security-report.md
+        echo "Generated at: $(date)" >> security-report.md
+        echo "" >> security-report.md
+        echo "## Summary" >> security-report.md
+        echo "- CodeQL Analysis: ${{ job.code-scanning.result }}" >> security-report.md
+        echo "- Dependency Review: ${{ job.dependency-review.result }}" >> security-report.md
+        echo "- Secret Scanning: ${{ job.secret-scanning.result }}" >> security-report.md
+        echo "- Container Scanning: ${{ job.container-scanning.result }}" >> security-report.md
+        echo "- License Compliance: ${{ job.license-compliance.result }}" >> security-report.md
+        echo "" >> security-report.md
+        
+        if [[ "${{ job.code-scanning.result }}" == "failure" ]] || [[ "${{ job.dependency-review.result }}" == "failure" ]] || [[ "${{ job.secret-scanning.result }}" == "failure" ]] || [[ "${{ job.container-scanning.result }}" == "failure" ]] || [[ "${{ job.license-compliance.result }}" == "failure" ]]; then
+          echo "## ⚠️ Issues Detected" >> security-report.md
+          echo "One or more security checks failed. Please review the detailed logs above." >> security-report.md
+        else
+          echo "## ✅ All Checks Passed" >> security-report.md
+          echo "All security and compliance checks passed successfully." >> security-report.md
+        fi
+        
+    - name: Upload security report
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-compliance-report
+        path: security-report.md
