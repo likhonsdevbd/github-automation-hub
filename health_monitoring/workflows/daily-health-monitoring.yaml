@@ -1,0 +1,259 @@
+name: Daily Repository Health Monitoring
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC (off-peak time)
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      repositories:
+        description: 'Repository list (owner/repo, one per line)'
+        required: false
+        type: string
+      skip_alerts:
+        description: 'Skip alert notifications'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for analysis
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+      
+      - name: Create directories
+        run: |
+          mkdir -p data reports dashboard_data alerts logs
+          
+      - name: Load configuration
+        run: |
+          echo "${{ secrets.HEALTH_CONFIG }}" > config/config.yaml
+          if [ -n "${{ secrets.ALERT_RULES_CONFIG }}" ]; then
+            echo "${{ secrets.ALERT_RULES_CONFIG }}" > config/alert_rules.yaml
+          fi
+      
+      - name: Run health monitoring
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EMAIL_USERNAME: ${{ secrets.EMAIL_USERNAME }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SKIP_ALERTS: ${{ inputs.skip_alerts || 'false' }}
+        run: |
+          python -m health_monitoring.scripts.daily_health_check \
+            --repositories "${{ inputs.repositories || env.REPOSITORIES }}" \
+            --config config/config.yaml \
+            --alert-rules config/alert_rules.yaml \
+            --output-dir ./data \
+            --reports-dir ./reports \
+            --dashboard-dir ./dashboard_data \
+            --skip-alerts $SKIP_ALERTS
+      
+      - name: Generate GitHub issue for critical alerts
+        if: failure() || contains(github.event.head_commit.message, '[critical-alert]')
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const issueBody = `
+            ## 🚨 Critical Repository Health Alert
+            
+            **Repository:** ${{ github.repository }}
+            **Run Time:** ${new Date().toISOString()}
+            **Status:** Failed
+            
+            ### Summary
+            The daily health monitoring workflow encountered issues. Please review the logs and take appropriate action.
+            
+            ### Next Steps
+            1. Check workflow logs for detailed error information
+            2. Verify GitHub token permissions
+            3. Ensure configuration is correct
+            4. Run manual health check if needed
+            
+            ### Resources
+            - [Workflow Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            - [Configuration Guide](./config/README.md)
+            
+            ---
+            *This issue was automatically created by the Repository Health Monitoring System*
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Critical Health Alert - ${new Date().toISOString().split('T')[0]}`,
+              body: issueBody,
+              labels: ['health-alert', 'critical', 'automated']
+            });
+      
+      - name: Upload data artifacts
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: health-monitoring-data-${{ github.run_id }}
+          path: |
+            data/
+            reports/
+            dashboard_data/
+            alerts/
+          retention-days: 7
+      
+      - name: Upload logs
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: health-monitoring-logs-${{ github.run_id }}
+          path: logs/
+          retention-days: 7
+      
+      - name: Comment on pull requests
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            // Add health monitoring status to PR comments
+            const prNumber = context.issue.number;
+            const comment = `
+            ## 📊 Repository Health Status
+            
+            **Repository:** ${{ github.repository }}
+            **Last Check:** ${new Date().toISOString()}
+            **Status:** ✅ Monitoring Active
+            
+            Health monitoring is running daily to track repository metrics and community engagement.
+            `;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: comment
+            });
+
+  generate-report:
+    needs: health-check
+    runs-on: ubuntu-latest
+    if: always() && (needs.health-check.result == 'success' || needs.health-check.result == 'failure')
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Download artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: health-monitoring-data-${{ github.run_id }}
+          path: ./data
+      
+      - name: Generate weekly summary report
+        if: github.event.schedule == '0 2 * * 1'  # Only on Mondays
+        run: |
+          python -m health_monitoring.scripts.generate_weekly_report \
+            --data-dir ./data \
+            --output-dir ./reports \
+            --format markdown
+      
+      - name: Create GitHub release for monthly summary
+        if: github.event.schedule == '0 2 1 * *'  # First Monday of month
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: health-report-${{ github.run_number }}
+          release_name: Health Monitoring Report ${{ github.run_number }}
+          body: |
+            ## 📊 Monthly Repository Health Report
+            
+            This release contains the monthly health monitoring summary for all tracked repositories.
+            
+            ### What's Included
+            - Comprehensive health score analysis
+            - Community engagement metrics
+            - Trend analysis and predictions
+            - Action items and recommendations
+            
+            ### Data Period
+            $(date -d '1 month ago' '+%Y-%m') through $(date '+%Y-%m')
+            
+            ---
+            Generated by Repository Health Monitoring System
+          draft: false
+          prerelease: false
+      
+      - name: Upload release assets
+        if: github.event.schedule == '0 2 1 * *'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./reports/monthly_summary.md
+          asset_name: health-report-${{ github.run_number }}.md
+          asset_content_type: text/markdown
+
+  notify-stakeholders:
+    needs: [health-check, generate-report]
+    runs-on: ubuntu-latest
+    if: always() && contains(github.event.head_commit.message, '[notify]') == false
+    
+    steps:
+      - name: Notify Slack for critical issues
+        if: needs.health-check.result == 'failure'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#health-alerts'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+          text: |
+            🚨 Repository Health Monitoring Failed
+            
+            Repository: ${{ github.repository }}
+            Run: ${{ github.run_id }}
+            Status: Failed
+            
+            Please check the workflow logs for details.
+      
+      - name: Send summary email
+        if: always() && github.event.schedule == '0 2 * * 1'  # Weekly summary
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: 587
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: Repository Health Weekly Summary - ${{ github.repository }}
+          to: ${{ secrets.HEALTH_NOTIFICATIONS_EMAIL }}
+          from: health-monitor@github.com
+          body: |
+            Repository Health Monitoring - Weekly Summary
+            
+            Repository: ${{ github.repository }}
+            Date: $(date '+%Y-%m-%d')
+            Status: ${{ needs.health-check.result == 'success' && '✅ Success' || '❌ Failed' }}
+            
+            Please find the detailed report in the attached artifacts.
+            
+            ---
+            Generated by Repository Health Monitoring System
+          attachments: ./reports/weekly_summary.md
