@@ -1,0 +1,525 @@
+# Alert Rules Configuration for Repository Health Monitoring System
+# 
+# This file defines custom alert rules that can be applied across repositories.
+# Rules can be enabled/disabled and thresholds can be adjusted per environment.
+
+alert_rules:
+  # Health Score Alerts
+  - name: "Critical Health Score"
+    id: "critical_health_score"
+    type: "health_score_drop"
+    severity: "critical"
+    enabled: true
+    condition:
+      metric: "health_score.overall_score"
+      operator: "lt"
+      threshold: 40
+    time_window: "12h"
+    cooldown: "6h"
+    description: "Repository health score has dropped to critical levels"
+    recommendation: "Immediate review and action required - all health components need attention"
+    escalation:
+      levels: 3
+      interval: "2h"
+    notifications:
+      email: true
+      slack: true
+      discord: true
+      github_issues: true
+    tags: ["critical", "health", "immediate_action"]
+
+  - name: "Low Health Score"
+    id: "low_health_score"
+    type: "health_score_drop"
+    severity: "high"
+    enabled: true
+    condition:
+      metric: "health_score.overall_score"
+      operator: "lt"
+      threshold: 60
+    time_window: "1d"
+    cooldown: "12h"
+    description: "Repository health score is below acceptable threshold"
+    recommendation: "Review health components and implement improvement plan"
+    escalation:
+      levels: 2
+      interval: "4h"
+    notifications:
+      email: true
+      slack: true
+      github_issues: true
+    tags: ["health", "improvement_needed"]
+
+  - name: "Health Score Declining Trend"
+    id: "health_score_declining"
+    type: "health_score_drop"
+    severity: "medium"
+    enabled: true
+    condition:
+      metric: "health_score.overall_score"
+      operator: "decreasing_trend"
+      threshold: 10  # 10% decline
+      window: "7d"
+    time_window: "7d"
+    cooldown: "1d"
+    description: "Health score showing declining trend over past week"
+    recommendation: "Investigate root causes of declining health metrics"
+    notifications:
+      email: true
+      slack: true
+    tags: ["health", "trend", "early_warning"]
+
+  # Response Time Alerts
+  - name: "Critical Response Time"
+    id: "critical_response_time"
+    type: "response_time_high"
+    severity: "critical"
+    enabled: true
+    condition:
+      metric: "engagement.avg_response_time_hours"
+      operator: "gt"
+      threshold: 96  # 4 days
+    time_window: "1d"
+    cooldown: "6h"
+    description: "Average issue response time is critically high"
+    recommendation: "Urgent: Assign dedicated triage team and review processes"
+    escalation:
+      levels: 3
+      interval: "1h"
+    notifications:
+      email: true
+      slack: true
+      discord: true
+      github_issues: true
+    tags: ["response_time", "critical", "triage"]
+
+  - name: "High Response Time"
+    id: "high_response_time"
+    type: "response_time_high"
+    severity: "high"
+    enabled: true
+    condition:
+      metric: "engagement.avg_response_time_hours"
+      operator: "gt"
+      threshold: 48  # 2 days
+    time_window: "3d"
+    cooldown: "12h"
+    description: "Average issue response time is too high"
+    recommendation: "Assign more maintainers or implement automated triaging"
+    notifications:
+      email: true
+      slack: true
+      github_issues: true
+    tags: ["response_time", "performance"]
+
+  # Issue Management Alerts
+  - name: "Critical Issue Closure Rate"
+    id: "critical_closure_rate"
+    type: "issue_closure_low"
+    severity: "critical"
+    enabled: true
+    condition:
+      metric: "metrics.issue_closure_rate"
+      operator: "lt"
+      threshold: 40
+    time_window: "7d"
+    cooldown: "6h"
+    description: "Issue closure rate is critically low"
+    recommendation: "Immediate triage required - consider closing stale issues"
+    escalation:
+      levels: 2
+      interval: "2h"
+    notifications:
+      email: true
+      slack: true
+      github_issues: true
+    tags: ["issues", "critical", "triage"]
+
+  - name: "Low Issue Closure Rate"
+    id: "low_closure_rate"
+    type: "issue_closure_low"
+    severity: "medium"
+    enabled: true
+    condition:
+      metric: "metrics.issue_closure_rate"
+      operator: "lt"
+      threshold: 60
+    time_window: "14d"
+    cooldown: "1d"
+    description: "Issue closure rate is below acceptable threshold"
+    recommendation: "Implement systematic issue triage and closure processes"
+    notifications:
+      email: true
+      slack: true
+    tags: ["issues", "process_improvement"]
+
+  # Contributor Engagement Alerts
+  - name: "No New Contributors"
+    id: "no_new_contributors"
+    type: "contributor_inactivity"
+    severity: "medium"
+    enabled: true
+    condition:
+      metric: "engagement.new_contributors_month"
+      operator: "eq"
+      threshold: 0
+    time_window: "30d"
+    cooldown: "7d"
+    description: "No new contributors in the last month"
+    recommendation: "Launch contributor onboarding campaign and improve good first issues"
+    notifications:
+      email: true
+      slack: true
+    tags: ["contributors", "growth", "onboarding"]
+
+  - name: "High Contributor Churn"
+    id: "high_contributor_churn"
+    type: "contributor_inactivity"
+    severity: "high"
+    enabled: true
+    condition:
+      metric: "engagement.at_risk_contributors"
+      operator: "gt"
+      threshold: 3
+    time_window: "14d"
+    cooldown: "1d"
+    description: "Multiple contributors showing signs of disengagement"
+    recommendation: "Reach out to at-risk contributors and improve engagement"
+    notifications:
+      email: true
+      slack: true
+      github_issues: true
+    tags: ["contributors", "retention", "engagement"]
+
+  - name: "Contributor Satisfaction Low"
+    id: "low_community_satisfaction"
+    type: "community_satisfaction_low"
+    severity: "medium"
+    enabled: true
+    condition:
+      metric: "engagement.community_satisfaction_score"
+      operator: "lt"
+      threshold: 50
+    time_window: "30d"
+    cooldown: "7d"
+    description: "Community satisfaction score indicates issues with contributor experience"
+    recommendation: "Conduct community survey and address feedback"
+    notifications:
+      email: true
+      slack: true
+    tags: ["satisfaction", "community", "experience"]
+
+  # Pull Request Management Alerts
+  - name: "Critical PR Merge Time"
+    id: "critical_pr_merge_time"
+    type: "pr_merge_time_high"
+    severity: "high"
+    enabled: true
+    condition:
+      metric: "metrics.pr_merge_time_avg"
+      operator: "gt"
+      threshold: 168  # 1 week
+    time_window: "7d"
+    cooldown: "12h"
+    description: "Average PR merge time is critically high"
+    recommendation: "Add more reviewers and streamline review process"
+    notifications:
+      email: true
+      slack: true
+      github_issues: true
+    tags: ["pull_requests", "review_process", "performance"]
+
+  - name: "High PR Merge Time"
+    id: "high_pr_merge_time"
+    type: "pr_merge_time_high"
+    severity: "medium"
+    enabled: true
+    condition:
+      metric: "metrics.pr_merge_time_avg"
+      operator: "gt"
+      threshold: 120  # 5 days
+    time_window: "14d"
+    cooldown: "1d"
+    description: "Average PR merge time is above target"
+    recommendation: "Review PR template and increase reviewer pool"
+    notifications:
+      email: true
+      slack: true
+    tags: ["pull_requests", "review_process", "optimization"]
+
+  # Repository Activity Alerts
+  - name: "Zero Commits"
+    id: "zero_commits"
+    type: "activity_low"
+    severity: "medium"
+    enabled: true
+    condition:
+      metric: "metrics.commits_this_week"
+      operator: "eq"
+      threshold: 0
+    time_window: "7d"
+    cooldown: "2d"
+    description: "No commits in the last week"
+    recommendation: "Review development priorities and community engagement"
+    notifications:
+      email: true
+      slack: true
+    tags: ["activity", "development", "momentum"]
+
+  - name: "Declining Commit Activity"
+    id: "declining_commits"
+    type: "activity_low"
+    severity: "medium"
+    enabled: true
+    condition:
+      metric: "metrics.commits_this_week"
+      operator: "decreasing_trend"
+      threshold: 50  # 50% decline
+      window: "4w"
+    time_window: "28d"
+    cooldown: "3d"
+    description: "Commit activity showing significant decline"
+    recommendation: "Investigate reasons for reduced development activity"
+    notifications:
+      email: true
+      slack: true
+    tags: ["activity", "trend", "development_health"]
+
+  # Community Engagement Alerts
+  - name: "Low Response Rate"
+    id: "low_response_rate"
+    type: "response_rate_low"
+    severity: "medium"
+    enabled: true
+    condition:
+      metric: "engagement.response_rate_percentage"
+      operator: "lt"
+      threshold: 70
+    time_window: "7d"
+    cooldown: "1d"
+    description: "Issue and PR response rate is below target"
+    recommendation: "Improve response protocols and assign triage volunteers"
+    notifications:
+      email: true
+      slack: true
+    tags: ["response", "engagement", "process"]
+
+  # Growth and Popularity Alerts
+  - name: "Star Decline"
+    id: "star_decline"
+    type: "star_decline"
+    severity: "low"
+    enabled: false  # Disabled by default - stars can fluctuate
+    condition:
+      metric: "metrics.stars"
+      operator: "decreasing_trend"
+      threshold: 5  # 5% decline
+      window: "30d"
+    time_window: "30d"
+    cooldown: "7d"
+    description: "Repository stars showing decline over past month"
+    recommendation: "Review community engagement and project visibility"
+    notifications:
+      email: false
+      slack: true
+    tags: ["popularity", "visibility", "marketing"]
+
+  - name: "Fork Activity Spike"
+    id: "fork_activity_spike"
+    type: "fork_activity_spike"
+    severity: "low"
+    enabled: true
+    condition:
+      metric: "metrics.forks"
+      operator: "increasing_trend"
+      threshold: 200  # 200% increase
+      window: "7d"
+    time_window: "7d"
+    cooldown: "2d"
+    description: "Fork activity showing significant spike - potential viral moment"
+    recommendation: "Monitor for increased contributor activity and engagement"
+    notifications:
+      email: false
+      slack: true
+    tags: ["forks", "viral", "opportunity"]
+
+# Alert Rule Templates (for common use cases)
+rule_templates:
+  # Template for small projects (< 100 stars)
+  small_project:
+    health_score_thresholds:
+      critical: 30
+      high: 50
+      medium: 65
+    response_time_thresholds:
+      high: 72
+      critical: 120
+    closure_rate_thresholds:
+      medium: 50
+      low: 30
+  
+  # Template for medium projects (100-1000 stars)
+  medium_project:
+    health_score_thresholds:
+      critical: 40
+      high: 60
+      medium: 70
+    response_time_thresholds:
+      high: 48
+      critical: 96
+    closure_rate_thresholds:
+      medium: 60
+      low: 40
+  
+  # Template for large projects (> 1000 stars)
+  large_project:
+    health_score_thresholds:
+      critical: 45
+      high: 65
+      medium: 75
+    response_time_thresholds:
+      high: 24
+      critical: 72
+    closure_rate_thresholds:
+      medium: 70
+      low: 50
+  
+  # Template for enterprise projects
+  enterprise_project:
+    health_score_thresholds:
+      critical: 50
+      high: 70
+      medium: 80
+    response_time_thresholds:
+      high: 12
+      critical: 48
+    closure_rate_thresholds:
+      medium: 80
+      low: 60
+
+# Global Alert Settings
+global_settings:
+  # Enable/disable all alerts
+  enabled: true
+  
+  # Default cooldown periods
+  cooldown:
+    critical: "1h"
+    high: "6h"
+    medium: "12h"
+    low: "1d"
+    info: "1d"
+  
+  # Escalation settings
+  escalation:
+    max_levels: 3
+    enabled: true
+  
+  # Batch notification settings
+  batch_notifications:
+    enabled: true
+    batch_interval: "1h"
+    max_alerts_per_batch: 10
+  
+  # Alert deduplication
+  deduplication:
+    enabled: true
+    similarity_threshold: 0.8
+  
+  # Historical alert retention
+  retention:
+    days: 90
+    cleanup_enabled: true
+
+# Notification Channel Overrides
+notification_overrides:
+  # Repository-specific overrides
+  repository_overrides:
+    "critical-project":
+      critical_alerts:
+        email: true
+        slack: true
+        discord: true
+      high_alerts:
+        email: true
+        slack: true
+      medium_alerts:
+        slack: true
+  
+  # Severity-specific defaults
+  severity_defaults:
+    critical:
+      email: true
+      slack: true
+      discord: true
+      github_issues: true
+    high:
+      email: true
+      slack: true
+      github_issues: true
+    medium:
+      email: false
+      slack: true
+    low:
+      email: false
+      slack: false
+    info:
+      email: false
+      slack: false
+
+# Integration Settings
+integrations:
+  # Slack integration
+  slack:
+    enabled: false
+    channel_mapping:
+      critical: "#alerts-critical"
+      high: "#alerts-high"
+      medium: "#alerts-medium"
+      low: "#alerts-info"
+  
+  # Discord integration
+  discord:
+    enabled: false
+    channel_mapping:
+      critical: "alerts-critical"
+      high: "alerts-high"
+  
+  # PagerDuty integration
+  pagerduty:
+    enabled: false
+    service_key: "${PAGERDUTY_SERVICE_KEY}"
+    severity_mapping:
+      critical: "critical"
+      high: "error"
+      medium: "warning"
+      low: "info"
+  
+  # OpsGenie integration
+  opsgenie:
+    enabled: false
+    api_key: "${OPSGENIE_API_KEY}"
+    team: "health-monitoring"
+
+# Monitoring and Health Checks
+monitoring:
+  # Alert system health checks
+  system_health:
+    enabled: true
+    check_interval: "5m"
+    thresholds:
+      alert_queue_size: 100
+      notification_failure_rate: 0.1
+      rule_evaluation_time: "30s"
+  
+  # Performance metrics
+  performance:
+    alerts_per_minute: 60
+    notifications_per_minute: 100
+    rule_evaluation_time_p95: "10s"
+  
+  # Reliability metrics
+  reliability:
+    notification_success_rate: 0.99
+    alert_accuracy: 0.95
+    false_positive_rate: 0.05
