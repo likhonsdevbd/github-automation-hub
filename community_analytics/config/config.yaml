@@ -1,0 +1,341 @@
+# Community Analytics System Configuration
+
+# System-wide settings
+system:
+  name: "Community Analytics System"
+  version: "1.0.0"
+  timezone: "UTC"
+  log_level: "INFO"
+  log_format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Analysis periods (in days)
+analysis_periods:
+  lifecycle_tracking: 180
+  engagement_scoring: 90
+  health_assessment: 90
+  retention_analysis: 365
+  network_analysis: 180
+  prediction_models: 90
+
+# Lifecycle tracking configuration
+lifecycle_tracker:
+  inactivity_threshold_days: 90
+  new_member_window_days: 30
+  active_member_min_contributions: 5
+  veteran_member_min_contributions: 50
+  retention_windows: [7, 30, 90, 180, 365]
+  cohort_analysis_months: 12
+
+# Engagement scoring configuration
+engagement_scorer:
+  weights:
+    contribution: 0.30
+    interaction: 0.20
+    consistency: 0.15
+    community: 0.15
+    impact: 0.15
+    growth: 0.05
+  
+  baselines:
+    contribution:
+      excellent: 100
+      good: 70
+      average: 40
+    interaction:
+      excellent: 80
+      good: 50
+      average: 25
+    consistency:
+      excellent: 90
+      good: 60
+      average: 30
+    community:
+      excellent: 75
+      good: 45
+      average: 20
+    impact:
+      excellent: 85
+      good: 55
+      average: 30
+    growth:
+      excellent: 95
+      good: 65
+      average: 35
+
+# Community health indicators
+health_indicators:
+  category_weights:
+    activity: 0.20
+    quality: 0.25
+    velocity: 0.20
+    sustainability: 0.20
+    inclusivity: 0.15
+  
+  benchmarks:
+    small_oss:
+      activity_score:
+        excellent: 70
+        good: 50
+        warning: 30
+      quality_score:
+        excellent: 80
+        good: 60
+        warning: 40
+      velocity_score:
+        excellent: 60
+        good: 40
+        warning: 25
+      sustainability_score:
+        excellent: 75
+        good: 55
+        warning: 35
+      inclusivity_score:
+        excellent: 85
+        good: 65
+        warning: 45
+    enterprise:
+      activity_score:
+        excellent: 85
+        good: 65
+        warning: 45
+      quality_score:
+        excellent: 90
+        good: 75
+        warning: 55
+      velocity_score:
+        excellent: 75
+        good: 55
+        warning: 35
+      sustainability_score:
+        excellent: 80
+        good: 60
+        warning: 40
+      inclusivity_score:
+        excellent: 80
+        good: 60
+        warning: 40
+
+# Retention analysis configuration
+retention_analyzer:
+  retention_windows: [7, 30, 90, 180, 365]
+  cohort_analysis_months: 12
+  retention_factor_weights:
+    contribution_frequency: 0.25
+    contribution_diversity: 0.20
+    collaboration: 0.20
+    community_engagement: 0.15
+    activity_consistency: 0.20
+  min_interaction_threshold: 2
+
+# Social network analysis configuration
+network_analyzer:
+  min_interaction_threshold: 2
+  centrality_top_k: 10
+  community_detection:
+    algorithm: "louvain"
+    resolution: 1.0
+
+# Prediction engine configuration
+prediction_engine:
+  models:
+    engagement_trend: ["linear", "random_forest", "ensemble"]
+    churn_risk: ["logistic", "random_forest"]
+    growth_forecast: ["linear", "random_forest"]
+    health_outlook: ["trend_analysis", "ensemble"]
+  
+  feature_config:
+    engagement_trend:
+      - "days_since_start"
+      - "total_contributors"
+      - "active_contributors"
+      - "contribution_frequency"
+      - "issue_response_time"
+      - "pr_merge_rate"
+      - "community_engagement_score"
+      - "retention_rate_30d"
+    
+    churn_risk:
+      - "days_since_last_activity"
+      - "contribution_frequency"
+      - "contribution_diversity"
+      - "community_engagement"
+      - "collaboration_count"
+      - "activity_consistency"
+      - "mentoring_involvement"
+      - "role_in_community"
+    
+    growth_forecast:
+      - "historical_growth_rate"
+      - "contributor_retention"
+      - "issue_creation_rate"
+      - "community_health_score"
+      - "external_visibility"
+      - "documentation_quality"
+  
+  prediction_horizon:
+    engagement_forecast_days: 30
+    churn_prediction_days: [30, 90, 180]
+    health_outlook_days: 30
+    growth_forecast_days: 90
+
+# Reporting configuration
+reporting:
+  default_analysis_period: 180
+  report_retention_days: 90
+  output_formats: ["json", "yaml", "markdown"]
+  include_predictions: true
+  include_recommendations: true
+  include_action_items: true
+  
+  # Email notifications
+  email_notifications:
+    enabled: false
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    recipients: []
+    notification_triggers:
+      - "critical_health_indicators"
+      - "high_churn_risk"
+      - "community_grade_decline"
+
+# Dashboard configuration
+dashboard:
+  enabled: true
+  refresh_interval: 3600  # seconds
+  metrics_to_display:
+    - "overall_community_score"
+    - "community_grade"
+    - "active_contributors"
+    - "engagement_score"
+    - "health_score"
+    - "retention_rate"
+    - "network_density"
+    - "predicted_churn"
+  
+  charts_config:
+    time_series:
+      enabled: true
+      metrics: ["engagement_score", "health_score", "active_contributors"]
+    distribution:
+      enabled: true
+      metrics: ["lifecycle_stage", "engagement_level", "risk_category"]
+    network:
+      enabled: true
+      layout: "force_directed"
+      node_size_metric: "degree_centrality"
+
+# Data storage configuration
+data_storage:
+  backend: "json"  # json, sqlite, postgres
+  json_storage:
+    data_directory: "./data"
+    backup_enabled: true
+    backup_interval: "daily"
+  sqlite_storage:
+    database_path: "./data/community_analytics.db"
+    backup_enabled: true
+  postgres_storage:
+    connection_string: ""
+    table_prefix: "community_analytics_"
+    backup_enabled: true
+
+# API configuration
+api:
+  enabled: false
+  host: "localhost"
+  port: 8000
+  cors_enabled: true
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 60
+  authentication:
+    enabled: false
+    method: "api_key"  # api_key, jwt, oauth
+
+# Alerting configuration
+alerting:
+  enabled: true
+  channels:
+    - "console"
+    - "webhook"
+  
+  thresholds:
+    community_health_score:
+      critical: 40
+      warning: 60
+      good: 80
+    churn_risk:
+      critical: 0.8
+      warning: 0.6
+    engagement_score:
+      critical: 30
+      warning: 50
+      good: 70
+    retention_rate_30d:
+      critical: 30
+      warning: 50
+      good: 70
+  
+  escalation_rules:
+    - condition: "community_health_score < 40"
+      actions: ["email_maintainers", "create_github_issue"]
+      delay: 0  # minutes
+    - condition: "predicted_churn > 5"
+      actions: ["slack_notification", "dashboard_alert"]
+      delay: 30  # minutes
+
+# GitHub integration
+github_integration:
+  api_version: "v3"
+  rate_limit_buffer: 1000  # requests to keep in reserve
+  cache_enabled: true
+  cache_ttl: 3600  # seconds
+  
+  endpoints:
+    contributors: "/repos/{owner}/{repo}/contributors"
+    issues: "/repos/{owner}/{repo}/issues"
+    pull_requests: "/repos/{owner}/{repo}/pulls"
+    commits: "/repos/{owner}/{repo}/commits"
+    comments: "/repos/{owner}/{repo}/issues/comments"
+    reviews: "/repos/{owner}/{repo}/pulls/{number}/comments"
+  
+  webhook_events:
+    - "pull_request"
+    - "issues"
+    - "issue_comment"
+    - "push"
+    - "member"
+
+# Feature flags
+feature_flags:
+  advanced_predictions: true
+  network_analysis: true
+  cohort_analysis: true
+  real_time_updates: false
+  experimental_metrics: false
+  external_integrations: false
+
+# Performance settings
+performance:
+  max_concurrent_analyses: 3
+  analysis_timeout: 300  # seconds
+  cache_enabled: true
+  parallel_processing: true
+  
+  # Resource limits
+  memory_limit_mb: 1024
+  cpu_limit_percent: 80
+  disk_space_limit_gb: 5
+
+# Testing configuration
+testing:
+  mock_api_responses: true
+  synthetic_data_generation: true
+  unit_test_coverage: 80
+  integration_test_enabled: true
+  
+  # Test data
+  sample_repository:
+    owner: "octocat"
+    repo: "Hello-World"
+  mock_response_files: "./tests/mock_data"
