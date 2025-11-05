@@ -1,0 +1,260 @@
+# Dashboard Configuration
+dashboard:
+  title: "Automation Hub Dashboard"
+  description: "Real-time monitoring and automation dashboard"
+  refresh_interval: 5000
+  max_alerts: 100
+  max_notifications: 50
+
+# API Configuration
+api:
+  host: "0.0.0.0"
+  port: 8000
+  debug: true
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://127.0.0.1:3000"
+
+# Database Configuration
+database:
+  type: "sqlite"  # sqlite, postgresql, mysql
+  url: "sqlite:///./dashboard.db"
+  echo: false
+  
+  # PostgreSQL configuration (if using PostgreSQL)
+  postgresql:
+    host: "localhost"
+    port: 5432
+    database: "automation_hub"
+    username: "postgres"
+    password: "password"
+
+# Monitoring Configuration
+monitoring:
+  prometheus:
+    url: "http://localhost:9090"
+    enabled: true
+    scrape_interval: 30
+    
+  grafana:
+    url: "http://localhost:3000"
+    api_key: ""
+    enabled: true
+    dashboards:
+      auto_create: true
+
+# Notification Channels
+notifications:
+  slack:
+    webhook_url: ""
+    channel: "#automation-alerts"
+    username: "Automation Hub"
+    enabled: false
+    
+  discord:
+    webhook_url: ""
+    username: "Automation Hub"
+    enabled: false
+    
+  teams:
+    webhook_url: ""
+    enabled: false
+    
+  email:
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    username: ""
+    password: ""
+    from_email: ""
+    to_emails: []
+    enabled: false
+    
+  sms:
+    provider: "twilio"  # twilio, aws_sns
+    account_sid: ""
+    auth_token: ""
+    from_number: ""
+    to_numbers: []
+    enabled: false
+
+# Alert Management
+alerts:
+  enabled: true
+  check_interval: 30
+  max_concurrent_checks: 10
+  
+  # Alert rules (can also be loaded from separate files)
+  rules:
+    - name: "High CPU Usage"
+      description: "CPU usage above 80%"
+      query: "cpu_usage"
+      severity: "critical"
+      threshold: 80.0
+      duration: 60
+      enabled: true
+      labels:
+        monitor: "system"
+      annotations:
+        summary: "High CPU usage detected"
+        
+    - name: "High Memory Usage"
+      description: "Memory usage above 85%"
+      query: "memory_usage"
+      severity: "warning"
+      threshold: 85.0
+      duration: 300
+      enabled: true
+      labels:
+        monitor: "system"
+      annotations:
+        summary: "High memory usage detected"
+        
+    - name: "Low Disk Space"
+      description: "Disk usage above 90%"
+      query: "disk_usage"
+      severity: "critical"
+      threshold: 90.0
+      duration: 30
+      enabled: true
+      labels:
+        monitor: "system"
+      annotations:
+        summary: "Low disk space detected"
+
+# Escalation Policies
+escalation_policies:
+  critical:
+    level_1:  # Immediate
+      channels: ["slack"]
+      timeout: 0
+    level_2:  # 5 minutes
+      channels: ["slack", "discord"]
+      timeout: 300
+    level_3:  # 15 minutes
+      channels: ["slack", "discord", "email"]
+      timeout: 900
+    level_4:  # 30 minutes
+      channels: ["slack", "discord", "email", "sms"]
+      timeout: 1800
+      
+  warning:
+    level_1:  # Immediate
+      channels: ["slack"]
+      timeout: 0
+    level_2:  # 10 minutes
+      channels: ["slack", "email"]
+      timeout: 600
+    level_3:  # 30 minutes
+      channels: ["slack", "email", "discord"]
+      timeout: 1800
+
+# Security Settings
+security:
+  secret_key: "your-secret-key-here-change-in-production"
+  access_token_expire_minutes: 30
+  database_url: ""
+  
+  # Rate limiting
+  rate_limit:
+    enabled: true
+    requests_per_minute: 60
+    burst_limit: 10
+    
+  # CORS
+  cors:
+    allow_origins: ["http://localhost:3000"]
+    allow_credentials: true
+    allow_methods: ["*"]
+    allow_headers: ["*"]
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # File logging
+  file:
+    enabled: true
+    filename: "dashboard.log"
+    max_size_mb: 10
+    backup_count: 5
+    
+  # Console logging
+  console:
+    enabled: true
+    
+  # Structured logging
+  structured:
+    enabled: false
+    format: "json"
+
+# Performance Settings
+performance:
+  # WebSocket settings
+  websocket:
+    max_connections: 100
+    heartbeat_interval: 30
+    timeout: 300
+    
+  # Cache settings
+  cache:
+    enabled: true
+    backend: "memory"  # memory, redis
+    ttl: 300
+    
+  # Database connection pool
+  database_pool:
+    min_connections: 5
+    max_connections: 20
+    max_overflow: 10
+    pool_timeout: 30
+
+# External Integrations
+integrations:
+  # GitHub API
+  github:
+    token: ""
+    api_url: "https://api.github.com"
+    rate_limit_threshold: 80
+    
+  # Prometheus
+  prometheus:
+    endpoint: "/metrics"
+    enabled: true
+    
+  # Health checks
+  health_check:
+    enabled: true
+    endpoint: "/health"
+    detailed: true
+
+# Development Settings
+development:
+  reload: true
+  hot_reload: true
+  show_sql: false
+  
+  # Mock data
+  mock_data:
+    enabled: true
+    interval: 5  # seconds
+    
+  # Debug endpoints
+  debug_endpoints: true
+  
+# Production Settings
+production:
+  # SSL/HTTPS
+  ssl:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+    
+  # Reverse proxy headers
+  proxy_headers: true
+  
+  # Gzip compression
+  gzip: true
+  
+  # Static file caching
+  static_cache_max_age: 31536000  # 1 year
