@@ -1,0 +1,327 @@
+name: Repository Health Analysis
+
+on:
+  schedule:
+    # Run weekly on Mondays at 3:00 AM UTC
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: 'Specific repository to analyze (owner/repo format)'
+        required: false
+        type: string
+      analysis_type:
+        description: 'Type of analysis to perform'
+        required: false
+        type: choice
+        options:
+        - health_score
+        - trends
+        - anomalies
+        - comprehensive
+        default: comprehensive
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+env:
+  PYTHON_VERSION: '3.9'
+
+jobs:
+  health-analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pandas numpy scipy scikit-learn
+
+    - name: Setup configuration
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        STORAGE_BACKEND: ${{ vars.GROWTH_METRICS_STORAGE_BACKEND || 'sqlite' }}
+        RATE_LIMIT_BUDGET: ${{ vars.GROWTH_METRICS_RATE_LIMIT_BUDGET || '1000' }}
+      run: |
+        mkdir -p config logs data
+        
+        cat > config/analytics.yaml << 'EOF'
+        analytics:
+          health_score_weights:
+            contributors: 0.30
+            pr_throughput: 0.20
+            review_velocity: 0.20
+            issue_freshness: 0.15
+            fork_growth: 0.15
+          anomaly_detection_enabled: true
+          forecasting_enabled: true
+          forecasting_days: 30
+          trend_analysis_period: 90
+          community_engagement_tracking: true
+        
+        github:
+          token: "${GITHUB_TOKEN}"
+          timeout: 30
+          max_retries: 3
+          rate_limit_budget: ${RATE_LIMIT_BUDGET}
+        
+        storage:
+          backend: ${STORAGE_BACKEND}
+          connection_string: "sqlite:///data/growth_metrics.db"
+        EOF
+
+    - name: Run health analysis
+      env:
+        ANALYSIS_REPOSITORY: ${{ inputs.repository }}
+        ANALYSIS_TYPE: ${{ inputs.analysis_type }}
+      run: |
+        python -c "
+        import sys
+        import json
+        import logging
+        from datetime import datetime, timedelta
+        from pathlib import Path
+        
+        # Setup logging
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # Import our modules
+            from growth_metrics.core.config_manager import ConfigManager
+            from growth_metrics.core.collection_orchestrator import DailyMetricsCollector
+            from growth_metrics.analytics.growth_analytics import GrowthAnalyticsEngine
+            from growth_metrics.storage.metrics_storage import MetricsStorage
+            
+            # Initialize components
+            config = ConfigManager('config/analytics.yaml')
+            config.load_from_environment()
+            
+            storage = MetricsStorage(config.get_effective_config()['storage'])
+            analytics = GrowthAnalyticsEngine(config.get_effective_config()['analytics'])
+            
+            # Get repository to analyze
+            repo_to_analyze = '${ANALYSIS_REPOSITORY}' or None
+            analysis_type = '${ANALYSIS_TYPE}' or 'comprehensive'
+            
+            if repo_to_analyze:
+                repos = [repo_to_analyze]
+            else:
+                # Use configured repositories
+                repos = [r for r in config.github.repositories]
+            
+            logger.info(f'Running {analysis_type} analysis for {len(repos)} repositories')
+            
+            results = {}
+            
+            for repo_full_name in repos:
+                if '/' not in repo_full_name:
+                    continue
+                    
+                owner, name = repo_full_name.split('/', 1)
+                logger.info(f'Analyzing {repo_full_name}')
+                
+                # Get historical data
+                historical_data = storage.get_repository_history(owner, name, days=90)
+                
+                # Get latest metrics (simplified - in practice you'd want real current data)
+                if historical_data:
+                    current_metrics = historical_data[-1]  # Most recent
+                else:
+                    # Collect fresh data
+                    collector = DailyMetricsCollector('config/analytics.yaml')
+                    collection_result = collector.collect_repository_metrics(owner, name)
+                    current_metrics = collection_result.to_dict() if collection_result else {}
+                    historical_data = []
+                
+                # Run analytics
+                if analysis_type in ['health_score', 'comprehensive']:
+                    health_analysis = analytics.analyze_repository_growth(current_metrics, historical_data)
+                    results[repo_full_name] = health_analysis
+                    
+                    # Generate GitHub issue for health report
+                    create_health_issue(health_analysis)
+                    
+                elif analysis_type == 'trends':
+                    # Implement trend analysis
+                    trend_results = analytics.trend_analyzer.analyze_trends(historical_data)
+                    results[repo_full_name] = {'trends': [t.__dict__ for t in trend_results]}
+                    
+                elif analysis_type == 'anomalies':
+                    # Implement anomaly detection
+                    anomaly_results = analytics.anomaly_detector.detect_anomalies(historical_data)
+                    results[repo_full_name] = {'anomalies': [a.__dict__ for a in anomaly_results]}
+            
+            # Save results
+            output_file = f'logs/health_analysis_{datetime.now().strftime(\"%Y%m%d_%H%M%S\")}.json'
+            with open(output_file, 'w') as f:
+                json.dump(results, f, indent=2, default=str)
+                
+            logger.info(f'Analysis completed. Results saved to {output_file}')
+            print(f'Analysis completed successfully for {len(repos)} repositories')
+            
+        except Exception as e:
+            logger.error(f'Health analysis failed: {e}', exc_info=True)
+            sys.exit(1)
+            
+        def create_health_issue(health_analysis):
+            '''Create GitHub issue with health analysis results'''
+            try:
+                import os
+                import requests
+                
+                repo = health_analysis.get('repository', '')
+                if '/' not in repo:
+                    return
+                    
+                owner, name = repo.split('/', 1)
+                
+                # Check if issue already exists for this week
+                headers = {
+                    'Authorization': f'token {os.environ[\"GITHUB_TOKEN\"]}',
+                    'Accept': 'application/vnd.github.v3+json',
+                    'User-Agent': 'GrowthMetrics-HealthAnalysis/1.0'
+                }
+                
+                # Search for existing issues
+                search_url = f'https://api.github.com/search/issues'
+                params = {
+                    'q': f'repo:{owner}/{name} is:issue in:title "Weekly Health Report"',
+                    'per_page': 1
+                }
+                
+                response = requests.get(search_url, headers=headers, params=params)
+                if response.status_code == 200:
+                    existing = response.json()
+                    if existing['total_count'] > 0:
+                        logger.info(f'Health report already exists for {repo}')
+                        return
+                
+                # Create new issue
+                health_score = health_analysis.get('health_score', {})
+                overall_score = health_score.get('overall_score', 0)
+                
+                # Determine health status
+                if overall_score >= 0.8:
+                    status = '🟢 Excellent'
+                elif overall_score >= 0.6:
+                    status = '🟡 Good'
+                elif overall_score >= 0.4:
+                    status = '🟠 Fair'
+                else:
+                    status = '🔴 Needs Attention'
+                
+                recommendations = health_analysis.get('recommendations', [])
+                
+                issue_body = f'''## 📊 Repository Health Report
+                
+**Overall Score:** {overall_score:.2f} ({status})
+**Analysis Date:** {health_analysis.get('analysis_timestamp', 'Unknown')}
+**Repository:** {repo}
+
+### Health Components
+
+- **Contributors:** {health_score.get('contributors_score', 0):.2f} (30% weight)
+- **PR Throughput:** {health_score.get('pr_throughput_score', 0):.2f} (20% weight)
+- **Review Velocity:** {health_score.get('review_velocity_score', 0):.2f} (20% weight)
+- **Issue Freshness:** {health_score.get('issue_freshness_score', 0):.2f} (15% weight)
+- **Fork Growth:** {health_score.get('fork_growth_score', 0):.2f} (15% weight)
+
+### Community Engagement
+'''
+                
+                engagement = health_analysis.get('community_engagement', {})
+                if engagement:
+                    issue_body += f'''
+- **Total Contributors:** {engagement.get('total_contributors', 0)}
+- **Community Activity Score:** {engagement.get('community_activity_score', 0):.2f}
+- **Issue Response Rate:** {engagement.get('issue_response_time', {}).get('response_rate', 0):.1%}
+- **PR Review Rate:** {engagement.get('pr_review_velocity', {}).get('review_rate', 0):.1%}
+'''
+                
+                if recommendations:
+                    issue_body += '\n### 💡 Recommendations\n\n'
+                    for i, rec in enumerate(recommendations[:5], 1):
+                        issue_body += f'{i}. {rec}\n'
+                
+                issue_body += f'''
+### Anomalies
+'''
+                
+                anomalies = health_analysis.get('anomalies', [])
+                if anomalies:
+                    for anomaly in anomalies[:5]:
+                        severity_emoji = {'high': '🔴', 'medium': '🟡', 'low': '🟢'}.get(anomaly.get('severity', 'low'), '⚪')
+                        issue_body += f'- {severity_emoji} {anomaly.get(\"description\", \"Unknown anomaly\")}\n'
+                else:
+                    issue_body += 'No significant anomalies detected.'
+                
+                issue_body += '''
+---
+*This report is automatically generated by the Growth Metrics Collection System.*
+'''
+                
+                # Create the issue
+                create_url = f'https://api.github.com/repos/{owner}/{name}/issues'
+                issue_data = {
+                    'title': f'Weekly Health Report - {datetime.now().strftime(\"%Y-%m-%d\")}',
+                    'body': issue_body,
+                    'labels': ['health-report', 'automation']
+                }
+                
+                response = requests.post(create_url, headers=headers, json=issue_data)
+                if response.status_code == 201:
+                    logger.info(f'Created health report issue for {repo}')
+                else:
+                    logger.warning(f'Failed to create issue for {repo}: {response.status_code}')
+                    
+            except Exception as e:
+                logger.warning(f'Failed to create health issue for {repo}: {e}')
+        "
+
+    - name: Upload analysis results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: health-analysis-results-${{ github.run_number }}
+        path: logs/health_analysis_*.json
+        retention-days: 30
+
+    - name: Create summary
+      if: always()
+      run: |
+        echo "## Health Analysis Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "Analysis Type: ${{ inputs.analysis_type || 'comprehensive' }}" >> $GITHUB_STEP_SUMMARY
+        echo "Repository: ${{ inputs.repository || 'Multiple repositories' }}" >> $GITHUB_STEP_SUMMARY
+        echo "Timestamp: $(date -u)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Find and display summary
+        if [ -f "logs/health_analysis_$(date +%Y%m%d)*.json" ]; then
+          echo "Analysis completed successfully. Check the uploaded artifacts for detailed results." >> $GITHUB_STEP_SUMMARY
+        else
+          echo "Analysis may have encountered issues. Check the logs for details." >> $GITHUB_STEP_SUMMARY
+        fi
