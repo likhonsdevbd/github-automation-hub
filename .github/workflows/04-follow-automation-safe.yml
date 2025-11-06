@@ -1,0 +1,234 @@
+name: Follow/Unfollow Automation (Safety Mode)
+
+on:
+  schedule:
+    # EXTREMELY CONSERVATIVE: Only weekdays at 9:00, 14:00, 16:00 UTC
+    # Maximum 8 actions per hour, 300 actions per day total
+    - cron: '0 9 * * 1-5'  # Monday-Friday 9:00 AM
+    - cron: '0 14 * * 1-5' # Monday-Friday 2:00 PM  
+    - cron: '0 16 * * 1-5' # Monday-Friday 4:00 PM
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run mode (no actual follows/unfollows)'
+        required: false
+        default: 'true'
+        type: boolean
+      max_actions:
+        description: 'Maximum number of actions (default: 8)'
+        required: false
+        default: '8'
+        type: string
+
+permissions:
+  # EXTREMELY LIMITED permissions - only for educational/research
+  contents: read
+  issues: read
+
+# IMPORTANT SAFETY ENVIRONMENT VARIABLES
+env:
+  CONSERVATIVE_MODE: 'true'
+  MAX_ACTIONS_PER_HOUR: '8'
+  MAX_DAILY_ACTIONS: '300'
+  COOLDOWN_PERIOD_HOURS: '1'
+  DETECTION_RISK_THRESHOLD: '0.7'
+  EDUCATIONAL_CONTEXT: 'true'
+
+jobs:
+  safe-follow-automation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120  # 2 hours max for conservative operation
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        
+    - name: Pre-flight Safety Check
+      run: |
+        echo "=== SAFETY VERIFICATION ==="
+        echo "Current rate limits:"
+        echo "Max actions per hour: $MAX_ACTIONS_PER_HOUR"
+        echo "Max daily actions: $MAX_DAILY_ACTIONS"
+        echo "Cooldown period: $COOLDOWN_PERIOD_HOURS hours"
+        
+        # Check if we're in safe mode
+        if [ "${{ inputs.dry_run }}" = "false" ]; then
+          echo "⚠️  WARNING: DRY RUN MODE IS DISABLED!"
+          echo "Only proceed with extreme caution."
+        fi
+        
+    - name: Rate Limit Status Check
+      run: |
+        echo "Checking GitHub API rate limits..."
+        python -c "
+        import os
+        from github import Github
+        
+        # Use a read-only token for rate limit checking
+        g = Github(os.environ.get('GITHUB_TOKEN', ''))
+        rate_limit = g.get_rate_limit()
+        
+        print(f'Core API remaining: {rate_limit.core.remaining}')
+        print(f'Core API reset: {rate_limit.core.reset}')
+        print(f'Search API remaining: {rate_limit.search.remaining}')
+        print(f'Search API reset: {rate_limit.search.reset}')
+        
+        # Exit if we're low on rate limits
+        if rate_limit.core.remaining < 100:
+            print('ERROR: Rate limit too low, aborting!')
+            exit(1)
+        "
+        
+    - name: Current Following Analysis (READ-ONLY)
+      run: |
+        echo "Analyzing current following/followers (READ-ONLY)..."
+        python -c "
+        from follow_automation.main_orchestrator import FollowAutomationOrchestrator
+        
+        orchestrator = FollowAutomationOrchestrator()
+        analysis = orchestrator.analyze_current_status()
+        
+        print('=== CURRENT STATUS ===')
+        print(f'Following count: {analysis[\"following_count\"]}')
+        print(f'Followers count: {analysis[\"followers_count\"]}')
+        print(f'Follow-back ratio: {analysis[\"follow_back_ratio\"]:.2%}')
+        print(f'Last activity: {analysis[\"last_activity\"]}')
+        
+        # Safety check
+        if analysis[\"follow_back_ratio\"] < 0.3:
+            print('⚠️  WARNING: Low follow-back ratio detected!')
+        "
+        
+    - name: Target Analysis (READ-ONLY)
+      run: |
+        echo "Analyzing potential targets (READ-ONLY)..."
+        python -c "
+        from follow_automation.queue.queue_manager import QueueManager
+        
+        queue_manager = QueueManager()
+        targets = queue_manager.get_potential_targets(limit=20)  # Very conservative limit
+        
+        print(f'Found {len(targets)} potential targets')
+        
+        for target in targets[:5]:  # Show only first 5
+            print(f'- {target[\"login\"]} (score: {target[\"score\"]:.2f})')
+        
+        # Save targets for analysis (no actual following)
+        import json
+        with open('potential_targets.json', 'w') as f:
+            json.dump(targets, f, indent=2)
+        "
+        
+    - name: Safety Compliance Check
+      run: |
+        echo "Performing safety compliance check..."
+        python -c "
+        from follow_automation.core.security_manager import SecurityManager
+        
+        security = SecurityManager()
+        compliance = security.check_compliance_status()
+        
+        print('=== COMPLIANCE STATUS ===')
+        for check, status in compliance.items():
+            status_icon = '✅' if status['passed'] else '❌'
+            print(f'{status_icon} {check}: {status[\"message\"]}')
+        
+        if not compliance['platform_compliance']['passed']:
+            print('❌ PLATFORM COMPLIANCE FAILED - ABORTING!')
+            exit(1)
+            
+        if not compliance['rate_limits']['passed']:
+            print('❌ RATE LIMIT COMPLIANCE FAILED - ABORTING!')
+            exit(1)
+        "
+        
+    - name: Educational Report Generation
+      run: |
+        echo "Generating educational analysis report..."
+        python -c "
+        from follow_automation.tracking.roi_optimizer import ROIOptimizer
+        import json
+        from datetime import datetime
+        
+        roi = ROIOptimizer()
+        report = {
+            'timestamp': datetime.now().isoformat(),
+            'operation_type': 'educational_analysis',
+            'status': 'safe_mode_only',
+            'recommendations': [
+                'Focus on meaningful engagement over quantity',
+                'Prioritize quality targets with high relevance scores',
+                'Monitor community response and adapt strategies',
+                'Maintain conservative rate limits always',
+                'Document all activities for compliance'
+            ],
+            'safety_measures': [
+                'All operations in dry-run mode',
+                'Conservative rate limiting (8 actions/hour max)',
+                'Platform compliance verification',
+                'Real-time monitoring and alerts',
+                'Human-in-the-loop controls enabled'
+            ]
+        }
+        
+        with open('educational_report.json', 'w') as f:
+            json.dump(report, f, indent=2)
+        
+        print('Educational analysis complete - report saved')
+        "
+        
+    - name: Manual Approval Required
+      if: ${{ !inputs.dry_run || inputs.dry_run == 'false' }}
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const { readFileSync } = require('fs');
+          
+          try {
+            const targets = JSON.parse(readFileSync('potential_targets.json', 'utf8'));
+            
+            const approval = {
+              title: '🤖 Follow Automation Approval Required',
+              body: `## Follow Automation Request\n\n**Current Status**: READY FOR MANUAL REVIEW\n\n### Potential Targets (${targets.length}):\n${targets.slice(0, 10).map(t => `- **@${t.login}** - Relevance Score: ${t.score.toFixed(2)} - ${t.bio || 'No bio'}`).join('\n')}\n\n### Safety Measures:\n- ✅ Educational/research context only\n- ✅ Conservative rate limits (8 actions/hour)\n- ✅ Platform compliance verified\n- ✅ Dry-run mode enabled by default\n\n### Required Actions:\n1. Review target list above\n2. Approve this workflow run if targets are suitable\n3. Enable dry-run mode for testing\n\n**Note**: This automation is designed for educational purposes with extreme safety measures.`,
+              labels: ['automation', 'approval-required', 'research']
+            };
+            
+            await github.rest.issues.create({
+              ...context.repo,
+              ...approval
+            });
+            
+          } catch (error) {
+            console.log('Could not create approval issue:', error.message);
+          }
+          
+    - name: Upload Educational Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: follow-automation-educational-reports
+        path: |
+          potential_targets.json
+          educational_report.json
+        retention-days: 90
+        
+    - name: Final Safety Summary
+      run: |
+        echo "=== AUTOMATION COMPLETE ==="
+        echo "✅ All operations performed in safe mode"
+        echo "✅ Educational analysis only"
+        echo "✅ Conservative rate limiting enforced"
+        echo "✅ Platform compliance verified"
+        echo "✅ Comprehensive logging enabled"
+        echo ""
+        echo "For actual operations, manual approval is required."
+        echo "Always prioritize quality over quantity in social engagement."

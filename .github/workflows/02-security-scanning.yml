@@ -1,0 +1,117 @@
+name: Security Scanning & Analysis
+
+on:
+  schedule:
+    # Run daily at 2:00 AM UTC (low activity time)
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type of security scan'
+        required: false
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - dependencies
+          - code
+          - secrets
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        # Enable scanning for all branches
+        fetch-depth: 0
+        
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: python, javascript, go
+        queries: security-extended
+        
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v2
+    
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v2
+    
+    - name: Run Semgrep
+      uses: semgrep/semgrep-action@v1
+      with:
+        config: >-
+          p/security-audit
+          p/python
+          p/javascript
+          p/go
+        generateSarif: "1"
+        
+    - name: Upload Semgrep SARIF
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: semgrep.sarif
+        
+    - name: Secret Scanning
+      run: |
+        echo "Running secret scanning..."
+        python -m security_automation.vulnerability_scanner --secrets-only
+        
+    - name: Dependency Vulnerability Scan
+      run: |
+        echo "Scanning for dependency vulnerabilities..."
+        pip install safety bandit
+        safety check --json --output safety-report.json
+        bandit -r . -f json -o bandit-report.json || true
+        
+    - name: Upload Security Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-reports
+        path: |
+          safety-report.json
+          bandit-report.json
+        retention-days: 90
+        
+    - name: Generate Security Summary
+      run: |
+        echo "Generating security summary..."
+        python -m security_automation.security_reporter --summary --format json
+        
+    - name: Create Security Issue (if vulnerabilities found)
+      if: failure()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          
+          try {
+            const safetyReport = fs.readFileSync('safety-report.json', 'utf8');
+            const vulnerabilities = JSON.parse(safetyReport);
+            
+            if (vulnerabilities.length > 0) {
+              const issue = {
+                title: `🚨 Security Vulnerabilities Found - ${new Date().toISOString().split('T')[0]}`,
+                body: `## Security Scan Results\n\nFound ${vulnerabilities.length} vulnerability:\n\n${vulnerabilities.map(v => `- ${v.package_name} v${v.installed_version}: ${v.vulnerability_id}`).join('\n')}\n\nDetailed report: [security-reports artifact](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`,
+                labels: ['security', 'vulnerability']
+              };
+              
+              await github.rest.issues.create({
+                ...context.repo,
+                ...issue
+              });
+            }
+          } catch (error) {
+            console.log('Could not create security issue:', error.message);
+          }

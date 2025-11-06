@@ -1,0 +1,257 @@
+name: Growth Analytics & Tracking
+
+on:
+  schedule:
+    # Weekly growth analysis every Monday at 2:30 AM UTC
+    - cron: '30 2 * * 1'
+    # Daily growth metrics at 8:00 AM UTC
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+    inputs:
+      analysis_type:
+        description: 'Type of growth analysis'
+        required: false
+        default: 'comprehensive'
+        type: choice
+        options:
+          - comprehensive
+          - daily
+          - weekly
+          - community
+          - predictions
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  growth-analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Get full history for growth analysis
+        
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install scikit-learn pandas matplotlib seaborn plotly
+        
+    - name: Growth Metrics Collection
+      run: |
+        echo "Collecting comprehensive growth metrics..."
+        python -m growth_metrics.core.collection_orchestrator --collect-all
+        
+    - name: Historical Growth Analysis
+      run: |
+        echo "Performing historical growth analysis..."
+        python -m growth_analysis.core.analyze_growth_patterns --repository=${{ github.repository }}
+        
+    - name: Community Growth Tracking
+      run: |
+        echo "Analyzing community growth patterns..."
+        python -m community_analytics.analytics_orchestrator --growth-analysis
+        
+    - name: Predictive Modeling
+      run: |
+        echo "Running growth predictions..."
+        python -m growth_analysis.predictors.predict_growth --repository=${{ github.repository }}
+        
+    - name: Anomaly Detection
+      run: |
+        echo "Detecting growth anomalies..."
+        python -m growth_analysis.anomaly_detector.detect_anomalies --repository=${{ github.repository }}
+        
+    - name: Competitive Benchmarking
+      run: |
+        echo "Running competitive analysis..."
+        python -m growth_analysis.benchmarking.benchmark_repository --repository=${{ github.repository }}
+        
+    - name: Generate Growth Report
+      run: |
+        echo "Generating comprehensive growth report..."
+        python -c "
+        from growth_analysis.main import create_growth_engine
+        from datetime import datetime, timedelta
+        
+        # Create growth analysis engine
+        engine = create_growth_engine()
+        
+        # Generate comprehensive report
+        report = engine.run_complete_analysis('${{ github.repository }}')
+        
+        # Save detailed report
+        import json
+        with open('growth_analysis_report.json', 'w') as f:
+            json.dump(report, f, indent=2, default=str)
+            
+        # Generate summary for GitHub issues
+        summary = f'''
+        ## Growth Analysis Summary
+        
+        **Repository**: ${{ github.repository }}
+        **Analysis Date**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
+        
+        ### Key Metrics
+        - **Growth Patterns Detected**: {len(report.get('growth_patterns', []))}
+        - **Anomalies Found**: {report.get('anomaly_detection', {}).get('summary', {}).get('total_anomalies', 0)}
+        - **Predicted Growth (30 days)**: {report.get('predictions', {}).get('thirty_day_forecast', 'N/A')}
+        - **Health Score**: {report.get('health_score', 'N/A')}/100
+        
+        ### Recommendations
+        {chr(10).join([f'- {rec[\"title\"]}' for rec in report.get('recommendations', [])[:5]])}
+        '''
+        
+        with open('growth_summary.md', 'w') as f:
+            f.write(summary)
+            
+        print('Growth analysis complete')
+        print(f'Patterns detected: {len(report.get(\"growth_patterns\", []))}')
+        print(f'Anomalies found: {report.get(\"anomaly_detection\", {}).get(\"summary\", {}).get(\"total_anomalies\", 0))}')
+        "
+        
+    - name: Create Growth Issue (Weekly Report)
+      if: github.event.schedule && github.event.schedule[0] == '30 2 * * 1'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          
+          try {
+            const summary = fs.readFileSync('growth_summary.md', 'utf8');
+            
+            const issue = {
+              title: `📈 Weekly Growth Report - ${new Date().toISOString().split('T')[0]}`,
+              body: summary + '\n\n**Full Report**: [growth analysis artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})',
+              labels: ['growth', 'analytics', 'weekly-report']
+            };
+            
+            await github.rest.issues.create({
+              ...context.repo,
+              ...issue
+            });
+            
+          } catch (error) {
+            console.log('Could not create growth issue:', error.message);
+          }
+          
+    - name: Growth Visualization
+      run: |
+        echo "Generating growth visualizations..."
+        python -c "
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        import pandas as pd
+        import json
+        
+        # Load growth data
+        with open('growth_analysis_report.json', 'r') as f:
+            data = json.load(f)
+        
+        # Create visualization directory
+        import os
+        os.makedirs('charts', exist_ok=True)
+        
+        # Growth trend chart
+        if 'growth_trends' in data:
+            plt.figure(figsize=(12, 6))
+            trends = data['growth_trends']
+            
+            for metric, values in trends.items():
+                if isinstance(values, list):
+                    plt.plot([v['date'] for v in values], [v['value'] for v in values], label=metric)
+            
+            plt.title('Repository Growth Trends')
+            plt.xlabel('Date')
+            plt.ylabel('Value')
+            plt.legend()
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            plt.savefig('charts/growth_trends.png', dpi=300, bbox_inches='tight')
+            plt.close()
+        
+        # Health score over time
+        if 'health_scores' in data:
+            plt.figure(figsize=(10, 6))
+            scores = data['health_scores']
+            
+            dates = [s['date'] for s in scores]
+            score_values = [s['score'] for s in scores]
+            
+            plt.plot(dates, score_values, marker='o', linewidth=2)
+            plt.title('Health Score Over Time')
+            plt.xlabel('Date')
+            plt.ylabel('Health Score')
+            plt.ylim(0, 100)
+            plt.axhline(y=70, color='r', linestyle='--', alpha=0.7, label='Good Threshold')
+            plt.axhline(y=50, color='orange', linestyle='--', alpha=0.7, label='Warning Threshold')
+            plt.legend()
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            plt.savefig('charts/health_scores.png', dpi=300, bbox_inches='tight')
+            plt.close()
+        
+        print('Growth visualizations created successfully')
+        "
+        
+    - name: Upload Growth Reports & Visualizations
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: growth-analysis-reports
+        path: |
+          growth_analysis_report.json
+          growth_summary.md
+          charts/
+        retention-days: 180  # Keep growth data longer for trends
+        
+    - name: Update Growth Metrics Badge
+      if: ${{ !github.event.workflow_dispatch }}
+      run: |
+        echo "Updating growth metrics badge..."
+        python -c "
+        from datetime import datetime
+        import json
+        
+        # Load growth data
+        with open('growth_analysis_report.json', 'r') as f:
+            data = json.load(f)
+        
+        # Calculate growth rate (simple version)
+        growth_rate = data.get('growth_rate', 0)
+        
+        # Simple SVG badge
+        color = '#brightgreen' if growth_rate > 0 else '#red'
+        emoji = '📈' if growth_rate > 0 else '📉'
+        
+        svg = f'''
+        <svg width=\"200\" height=\"20\" xmlns=\"http://www.w3.org/2000/svg\">
+          <rect width=\"200\" height=\"20\" rx=\"3\" fill=\"{color}\"/>
+          <text x=\"8\" y=\"14\" font-family=\"DejaVu Sans\" font-size=\"12\" fill=\"#fff\">{emoji} Growth: {growth_rate:.1f}%</text>
+        </svg>
+        '''
+        
+        with open('growth-badge.svg', 'w') as f:
+            f.write(svg)
+        "
+        
+    - name: Commit Growth Badge
+      if: ${{ !github.event.workflow_dispatch }}
+      run: |
+        git config --local user.email "automation@github.com"
+        git config --local user.name "GitHub Automation Bot"
+        git add growth-badge.svg || true
+        git commit -m "Update growth badge - $(date)" || true
+        git push || true

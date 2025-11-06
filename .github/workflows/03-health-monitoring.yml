@@ -1,0 +1,159 @@
+name: Repository Health Monitoring
+
+on:
+  schedule:
+    # Run every 6 hours for real-time health monitoring
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      check_type:
+        description: 'Type of health check'
+        required: false
+        default: 'comprehensive'
+        type: choice
+        options:
+          - comprehensive
+          - quick
+          - community
+          - activity
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  health-monitoring:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        
+    - name: Repository Health Analysis
+      run: |
+        echo "Running comprehensive health analysis..."
+        python -m health_monitoring.scripts.health_monitor --analyze-all
+        
+    - name: Community Engagement Metrics
+      run: |
+        echo "Analyzing community engagement..."
+        python -m community_analytics.analytics_orchestrator --community-health
+        
+    - name: Growth Metrics Collection
+      run: |
+        echo "Collecting growth metrics..."
+        python -m growth_metrics.core.collection_orchestrator
+        
+    - name: Performance Monitoring
+      run: |
+        echo "Running performance analysis..."
+        python -m analytics_orchestrator.core.orchestrator --performance-check
+        
+    - name: Generate Health Score
+      run: |
+        echo "Calculating repository health score..."
+        python -c "
+        from health_monitoring.src.health_score_calculator import HealthScoreCalculator
+        calculator = HealthScoreCalculator()
+        score = calculator.calculate_overall_score()
+        print(f'Repository Health Score: {score}/100')
+        "
+        
+    - name: Community Health Check
+      run: |
+        echo "Checking community health indicators..."
+        python -c "
+        from community_analytics.core.health_indicators import HealthIndicators
+        indicators = HealthIndicators()
+        health = indicators.calculate_community_health()
+        print(f'Community Health: {health[\"grade\"]} ({health[\"score\"]}/100)')
+        "
+        
+    - name: Generate Health Dashboard Data
+      run: |
+        echo "Generating dashboard data..."
+        python -m health_monitoring.src.dashboard_data_generator --dashboard-data
+        
+    - name: Create Health Issues (if score drops)
+      uses: actions/github-script@v6
+      if: failure()
+      with:
+        script: |
+          const { execSync } = require('child_process');
+          
+          try {
+            // Get current health score
+            const score = execSync('python -c "from health_monitoring.src.health_score_calculator import HealthScoreCalculator; print(HealthScoreCalculator().calculate_overall_score())"').toString().trim();
+            const scoreNum = parseInt(score);
+            
+            if (scoreNum < 70) {
+              const issue = {
+                title: `📊 Repository Health Alert - Score: ${score}/100`,
+                body: `## Health Monitoring Alert\n\n**Current Health Score:** ${score}/100\n**Threshold:** 70/100\n\n### Recommendations:\n- Review recent activity patterns\n- Check community engagement metrics\n- Analyze issue response times\n- Monitor contribution trends\n\n[View detailed health report](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`,
+                labels: ['health', 'monitoring', 'community']
+              };
+              
+              await github.rest.issues.create({
+                ...context.repo,
+                ...issue
+              });
+            }
+          } catch (error) {
+            console.log('Health check completed but could not create issue:', error.message);
+          }
+          
+    - name: Upload Health Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: health-monitoring-reports
+        path: |
+          health_report_*.json
+          community_health_*.json
+          dashboard_data_*.json
+        retention-days: 60
+        
+    - name: Update Health Badge
+      run: |
+        echo "Updating health status..."
+        python -c "
+        from health_monitoring.src.health_score_calculator import HealthScoreCalculator
+        from datetime import datetime
+        
+        calculator = HealthScoreCalculator()
+        score = calculator.calculate_overall_score()
+        
+        # Simple SVG badge generation
+        svg = f'''
+        <svg width="160" height="20" xmlns="http://www.w3.org/2000/svg">
+          <rect width="160" height="20" rx="3" fill="#{("brightgreen" if score >= 80 else "yellowgreen" if score >= 70 else "yellow" if score >= 60 else "orange")}"/>
+          <text x="8" y="14" font-family="DejaVu Sans" font-size="12" fill="#fff">Health: {score}/100</text>
+        </svg>
+        '''
+        
+        with open('health-badge.svg', 'w') as f:
+            f.write(svg)
+        "
+        
+    - name: Commit Health Badge
+      if: ${{ !github.event.workflow_dispatch }}
+      run: |
+        git config --local user.email "automation@github.com"
+        git config --local user.name "GitHub Automation Bot"
+        git add health-badge.svg || true
+        git commit -m "Update health badge - $(date)" || true
+        git push
